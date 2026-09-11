@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Quotivo",
+    "slug": "quotivo",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "quotivo",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.quotivo.app"
+    },
+    "android": {
+      "package": "com.quotivo.app"
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
+  }
+}
