@@ -5,18 +5,42 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/reliability.test.ts"
   },
   "dependencies": {
+    "@config-plugins/react-native-blob-util": "^14.0.2",
+    "@config-plugins/react-native-pdf": "^14.0.2",
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "docx": "^9.7.1",
     "expo": "^57.0.22",
+    "expo-asset": "~57.0.17",
+    "expo-constants": "~57.0.18",
+    "expo-dev-client": "~57.0.19",
+    "expo-document-picker": "~57.0.2",
+    "expo-file-system": "~57.0.7",
+    "expo-print": "~57.0.2",
+    "expo-sharing": "~57.0.19",
+    "expo-splash-screen": "~57.0.9",
+    "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-native": "0.86.3",
+    "react-native-blob-util": "^0.24.11",
+    "react-native-pdf": "^7.0.5",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4"
   },
   "devDependencies": {
+    "@types/node": "^22.20.2",
     "@types/react": "~19.2.10",
+    "@types/sql.js": "^1.4.11",
+    "sql.js": "^1.14.2",
+    "tsx": "^4.23.13",
     "typescript": "~6.0.3"
   }
 }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="122" height="122" viewBox="0 0 122 122" role="img" aria-labelledby="title desc">
+  <title id="title">Quotivo mark</title>
+  <desc id="desc">Simbolo Quotivo estratto invariato dal master.</desc>
+  <defs><clipPath id="markClip"><rect x="18" y="18" width="86" height="86" rx="27" ry="27"/></clipPath></defs>
+  <g id="quotivo-mark" transform="rotate(-8 61 61)">
+    <g clip-path="url(#markClip)">
+      <rect x="18" y="18" width="86" height="86" fill="#20C997"/>
+      <path d="M 32 94 C 42 79, 54 70, 68 62 C 82 54, 96 42, 108 27 L 113 109 L 20 109 Z" fill="#7A5AF8"/>
+    </g>
+    <rect x="60" y="34" width="25" height="55" rx="13" ry="13" fill="#FFFFFF"/>
+    <path d="M 73 84 C 76 90, 80 94, 86 98" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/>
+  </g>
+</svg>

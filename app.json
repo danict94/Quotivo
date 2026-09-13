@@ -4,7 +4,8 @@
     "slug": "quotivo",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
+    "icon": "./asset/icon.png",
     "scheme": "quotivo",
     "assetBundlePatterns": [
       "**/*"
@@ -14,10 +15,37 @@
       "bundleIdentifier": "com.quotivo.app"
     },
     "android": {
-      "package": "com.quotivo.app"
+      "package": "com.quotivo.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./asset/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF",
+        "monochromeImage": "./asset/monochrome-icon.png"
+      },
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-sqlite",
+      "@config-plugins/react-native-pdf",
+      "@config-plugins/react-native-blob-util",
+      "./plugins/withShortCmakeStaging",
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./asset/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF",
+          "dark": {
+            "image": "./asset/splash-icon.png",
+            "backgroundColor": "#0F1210"
+          }
+        }
+      ],
+      "./plugins/withQuotivoSvgAssets"
     ]
   }
 }
