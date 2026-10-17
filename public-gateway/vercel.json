@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/p/:token/pdf",
+      "destination": "/api/p/:token/pdf"
+    },
+    {
+      "source": "/p/:token",
+      "destination": "/api/p/:token"
+    }
+  ]
+}

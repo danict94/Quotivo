@@ -268,3 +268,16 @@ La pipeline è `Quote/snapshot → StandardDocumentModel → Standard renderer �
 L'emissione SQLite termina prima del rendering perché database e filesystem non condividono una transazione. Un errore PDF viene registrato senza annullare numero o snapshot; la rigenerazione usa il medesimo snapshot. Il nome include anno, numero, ID sanitizzato e `standard-a4-v1`; un definitivo esistente non viene sovrascritto.
 
 La preview incorporata usa `react-native-pdf` e `react-native-blob-util`, configurati tramite gli omonimi config plugin. Richiede development build; Expo Go non contiene questi moduli nativi. `expo-dev-client` è stato aggiunto per il ciclo di prova locale. Nessuna WebView o schermata React viene presentata come anteprima PDF.
+## Quote sharing pubblico
+
+## Recenti lavorazioni
+
+Recenti non è un catalogo né una nuova persistenza: `listRecentWorkItems` deriva le righe confermate dai preventivi emessi locali. Seleziona prima l’ultima revisione emessa per ogni root, poi deduplica le righe equivalenti e le ordina per data dell’ultimo utilizzo. Il riuso crea una copia modificabile nella bozza corrente; la promozione al Catalogo passa dall’unico repository `catalog_items` esistente.
+
+## Fondazione revisioni preventivo
+
+La migrazione locale 14 aggiunge a `quotes` `revision_root_quote_id`, `parent_quote_id` e `revision_number`. Gli esistenti restano Rev.0 (`0`, riferimenti null); una revisione successiva deve indicare una root Rev.0 e il parent della revisione immediatamente precedente. Indici e trigger impediscono numeri negativi, autoriferimenti, radici/parent mancanti, catene non consecutive e doppie revisioni nello stesso root. Il database locale è già isolato per account: ogni riferimento `quotes` validato dal trigger appartiene quindi allo stesso owner locale. Non esiste ancora clonazione, UI, modifica della numerazione, snapshot o PDF per revisioni.
+
+`CreateRevisionUseCase` legge il solo snapshot immutabile dell'emesso e produce una nuova `Quote` draft con ID nuovi per documento e righe. Il repository locale serializza l'inserimento in transazione esclusiva e l'indice unico intercetta collisioni; la sorgente deve essere l'ultima revisione emessa della catena. Il catalogo e il profilo attività corrente non vengono letti. Il collegamento `parent_quote_id` conserva l'accesso a condizioni e dati storici nel relativo snapshot, senza duplicare il profilo nella bozza.
+
+`quote_share_snapshots` conserva il payload immutabile e versionato; `quote_shares` conserva solo l'hash del bearer token e stato. Il bearer recuperabile è cifrato nel vault separato `quote_share_token_secrets`, non leggibile dall'app. Le Edge Function `quote-share-owner` (JWT owner) e `quote-public` (token pubblico) sono gli unici confini per creare, recuperare, revocare, aprire e decidere sul link.

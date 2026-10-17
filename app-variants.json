@@ -1,0 +1,4 @@
+{
+  "stable": { "name": "Quotivo", "slug": "quotivo", "androidPackage": "com.quotivo.app", "scheme": "quotivo" },
+  "dev": { "name": "Quotivo Dev", "slug": "quotivo-dev", "androidPackage": "com.quotivo.app.dev", "scheme": "quotivo-dev" }
+}

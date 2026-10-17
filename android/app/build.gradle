@@ -2,7 +2,23 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+import groovy.json.JsonSlurper
+
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def quotivoAppConfig = new JsonSlurper().parse(new File(projectRoot, "app.json")).expo
+def quotivoVariants = new JsonSlurper().parse(new File(projectRoot, "app-variants.json"))
+if (!(quotivoAppConfig.version instanceof String) || !(quotivoAppConfig.android?.versionCode instanceof Number)) {
+    throw new GradleException("app.json must define expo.version and expo.android.versionCode.")
+}
+def quotivoVariantName = System.getenv('APP_VARIANT') ?: 'stable'
+if (!quotivoVariants.containsKey(quotivoVariantName)) {
+    throw new GradleException("Unsupported APP_VARIANT: ${quotivoVariantName}")
+}
+def quotivoVariant = quotivoVariants[quotivoVariantName]
+def quotivoApplicationId = quotivoVariant.androidPackage
+def quotivoAppLabel = quotivoVariant.name
+def quotivoScheme = quotivoVariant.scheme
+def quotivoExpoScheme = "exp+${quotivoVariant.slug}"
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -111,11 +127,12 @@ android {
 
     namespace 'com.quotivo.app'
     defaultConfig {
-        applicationId 'com.quotivo.app'
+        applicationId quotivoApplicationId
+        manifestPlaceholders = [quotivoAppLabel: quotivoAppLabel, quotivoScheme: quotivoScheme, quotivoExpoScheme: quotivoExpoScheme]
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.0"
+        versionCode quotivoAppConfig.android.versionCode.intValue()
+        versionName quotivoAppConfig.version
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -151,6 +168,16 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+}
+
+tasks.register("printQuotivoVariantConfig") {
+    doLast {
+        println("QUOTIVO_VARIANT=${quotivoVariantName}")
+        println("QUOTIVO_NAME=${quotivoAppLabel}")
+        println("QUOTIVO_APPLICATION_ID=${quotivoApplicationId}")
+        println("QUOTIVO_SCHEME=${quotivoScheme}")
+        println("QUOTIVO_EXPO_SCHEME=${quotivoExpoScheme}")
     }
 }
 

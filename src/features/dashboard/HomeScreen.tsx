@@ -1,0 +1,20 @@
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { Quote } from '../../domain';
+import { QuoteShareCommercialOutcome } from '../quote-sharing/QuoteSharingRepository';
+import { ArchiveNavigationIntent } from '../archive/archiveNavigation';
+import { commercialMetrics } from '../quote-status/commercialMetrics';
+import { EmptyState } from '../../ui/components';
+import { useTheme } from '../../ui/theme';
+import { QuoteRow } from '../archive/QuoteRow';
+import { CommercialStatCard } from './CommercialStatCard';
+
+export function HomeScreen({ quotes, outcomes, onStartDraft, onOpenArchive, onOpenQuote, onDeleteDraft }: { quotes: Quote[]; outcomes: Readonly<Record<string, QuoteShareCommercialOutcome | null>>; onStartDraft: () => void; onOpenArchive: (intent?: ArchiveNavigationIntent) => void; onOpenQuote: (quote: Quote) => void; onDeleteDraft: (quote: Quote) => void }) {
+  const { theme } = useTheme(); const styles = createStyles(theme); const metrics = commercialMetrics(quotes, outcomes);
+  return <><View style={styles.homeIntro}><View><Text style={styles.heroKicker}>ARCHIVIO LOCALE E SICURO</Text><Text style={styles.heroTitle}>I tuoi preventivi.</Text></View><Pressable style={styles.primaryButton} onPress={onStartDraft}><Text style={styles.primaryButtonText}>+ Nuovo preventivo</Text></Pressable></View><Text style={styles.sectionTitle}>Panoramica</Text><View style={styles.commercialStats}><CommercialStatCard label="Emessi" count={metrics.issuedCount} amountCents={metrics.issuedAmountCents} tone="neutral" onPress={()=>onOpenArchive('EMESSI')}/><CommercialStatCard label="In attesa" count={metrics.pendingCount} amountCents={metrics.pendingAmountCents} tone="warning" onPress={()=>onOpenArchive('PENDING')}/><CommercialStatCard label="Accettati" count={metrics.acceptedCount} amountCents={metrics.acceptedAmountCents} tone="success" onPress={()=>onOpenArchive('ACCEPTED')}/><CommercialStatCard label="Rifiutati" count={metrics.rejectedCount} amountCents={metrics.rejectedAmountCents} tone="danger" onPress={()=>onOpenArchive('REJECTED')}/></View><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Ultimi preventivi</Text><Pressable onPress={() => onOpenArchive()}><Text style={styles.linkText}>Vedi archivio</Text></Pressable></View>{quotes.slice(0, 3).map((quote) => <QuoteRow key={quote.id} quote={quote} commercialOutcome={outcomes[quote.id] ?? null} onPress={() => onOpenQuote(quote)} onDeleteDraft={quote.status==='draft'?()=>onDeleteDraft(quote):undefined} />)}{!quotes.length && <EmptyState title="Ancora nessun preventivo" body="Crea una bozza: verrà salvata nell'archivio locale." />}</>;
+}
+
+function createStyles(theme: import('../../ui/tokens').Theme) { return StyleSheet.create({
+  homeIntro:{backgroundColor:theme.surface,borderWidth:1,borderColor:theme.border,borderRadius:22,padding:18,marginBottom:24,flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:14,shadowColor:theme.shadow,shadowOpacity:.05,shadowRadius:16,shadowOffset:{width:0,height:6},elevation:2},heroKicker:{color:theme.greenStrong,fontSize:10,fontWeight:'800',letterSpacing:1.1,marginBottom:7},heroTitle:{color:theme.text,fontSize:23,lineHeight:27,fontWeight:'800',flexShrink:1},primaryButton:{backgroundColor:theme.green,borderRadius:14,paddingVertical:12,paddingHorizontal:13,flexShrink:0},primaryButtonText:{color:theme.onGreen,fontSize:12,fontWeight:'800'},
+  sectionHeading:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:12,marginTop:20},sectionTitle:{color:theme.text,fontSize:20,fontWeight:'800',marginBottom:12,flexShrink:1},linkText:{color:theme.violet,fontWeight:'800',fontSize:12},commercialStats:{flexDirection:'row',flexWrap:'wrap',gap:10,marginBottom:20},
+}); }

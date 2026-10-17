@@ -1,5 +1,8 @@
+/** @public Stato persistito di un preventivo. */
 export type QuoteStatus = 'draft' | 'issued';
+/** @public Contratto di prezzo della lavorazione, persistito negli snapshot. */
 export type PriceMode = 'measured' | 'body';
+/** @public Trattamento IVA persistito negli snapshot e nei documenti. */
 export type VatTreatment = 'rate' | 'not_applied';
 export const QUANTITY_SCALE = 10_000;
 
@@ -11,6 +14,7 @@ export type QuoteItem = {
 };
 export type Quote = {
   id: string; number: number | null; numberYear: number | null; clientId:string|null; client: string; clientContactName:string; clientPhone:string; clientEmail:string; clientAddress:string; clientTaxId:string; clientVatNumber:string; siteAddress:string; title: string; introduction: string; defaultVatBasisPoints:number;
+  revisionRootQuoteId: string | null; parentQuoteId: string | null; revisionNumber: number;
   globalDiscountBasisPoints: number; status: QuoteStatus; createdAt: string; updatedAt: string; issuedAt: string | null;
   issuedLocalDate: string | null; issuedOffsetMinutes: number | null; validUntil: string | null; items: QuoteItem[];
 };
@@ -47,10 +51,12 @@ export function hasMeaningfulDraftContent(quote: Pick<Quote, 'client' | 'clientC
     || item.unitPriceCents !== 0 || item.bodyPriceCents !== 0 || item.lineDiscountBasisPoints !== 0 || item.isOptional);
 }
 function roundHalfUp(n: bigint, d: bigint) { return Number((n + d / 2n) / d); }
-export function itemBaseCents(item: QuoteItem) { return item.priceMode === 'body' ? item.bodyPriceCents : roundHalfUp(BigInt(item.quantityScaled) * BigInt(item.unitPriceCents), BigInt(QUANTITY_SCALE)); }
+function itemBaseCents(item: QuoteItem) { return item.priceMode === 'body' ? item.bodyPriceCents : roundHalfUp(BigInt(item.quantityScaled) * BigInt(item.unitPriceCents), BigInt(QUANTITY_SCALE)); }
 export function itemTotalCents(item: QuoteItem) { const base = itemBaseCents(item); return base - roundHalfUp(BigInt(base) * BigInt(item.lineDiscountBasisPoints), 10_000n); }
 
+/** @public Dettaglio economico serializzato nel risultato e negli snapshot. */
 export type EconomicLine = { id: string; baseCents: number; lineDiscountCents: number; globalDiscountCents: number; netCents: number };
+/** @public Gruppo IVA serializzato nel risultato e negli snapshot. */
 export type VatGroup = { treatment: VatTreatment; rateBasisPoints: number | null; note: string; netCents: number; vatCents: number };
 export type EconomicResult = { subtotalCents: number; lineDiscountCents: number; globalDiscountCents: number; netCents: number; vatCents: number; totalCents: number; lines: EconomicLine[]; vatGroups: VatGroup[] };
 
@@ -73,6 +79,53 @@ export function calculateEconomics(items: QuoteItem[], globalDiscountBasisPoints
   return { subtotalCents: rows.reduce((s, r) => s + r.base, 0), lineDiscountCents: rows.reduce((s, r) => s + r.discount, 0), globalDiscountCents: global, netCents, vatCents, totalCents: netCents + vatCents, lines, vatGroups };
 }
 export function quoteTotalCents(q: Pick<Quote, 'items' | 'globalDiscountBasisPoints'>) { return calculateEconomics(q.items, q.globalDiscountBasisPoints).totalCents; }
+export type RevisionAggregate = { currentQuotes: Quote[]; totalCents: number; deltaByQuoteId: ReadonlyMap<string, number> };
+
+function revisionChainId(quote: Quote) { return quote.revisionNumber > 0 ? quote.revisionRootQuoteId ?? quote.id : quote.id; }
+
+function issuedRevisionChains(quotes: Quote[]) {
+  const byChain = new Map<string, Quote[]>();
+  quotes.filter((quote) => quote.status === 'issued').forEach((quote) => {
+    const chain = revisionChainId(quote);
+    const values = byChain.get(chain) ?? [];
+    values.push(quote);
+    byChain.set(chain, values);
+  });
+  byChain.forEach((chain) => chain.sort((left, right) => left.revisionNumber - right.revisionNumber || (left.issuedAt ?? '').localeCompare(right.issuedAt ?? '')));
+  return byChain;
+}
+
+export type CurrentQuoteProjection = Readonly<{
+  currentQuotes: Quote[];
+  currentIssuedQuotes: Quote[];
+  drafts: Quote[];
+}>;
+
+/** Canonical current-quote projection: all drafts plus only the latest issued revision per chain. */
+export function currentQuoteProjection(quotes: Quote[]): CurrentQuoteProjection {
+  const currentIssuedIds = new Set([...issuedRevisionChains(quotes).values()].map((chain) => chain.at(-1)!.id));
+  const currentQuotes = quotes.filter((quote) => quote.status === 'draft' || currentIssuedIds.has(quote.id));
+  return {
+    currentQuotes,
+    currentIssuedQuotes: currentQuotes.filter((quote) => quote.status === 'issued'),
+    drafts: currentQuotes.filter((quote) => quote.status === 'draft'),
+  };
+}
+
+/** Restituisce una sola emissione economica per chain: l'ultima revisione emessa. */
+export function aggregateIssuedRevisionChains(quotes: Quote[]): RevisionAggregate {
+  const byChain = issuedRevisionChains(quotes);
+  const deltaByQuoteId = new Map<string, number>();
+  byChain.forEach((chain) => {
+    chain.forEach((revision) => {
+      if (revision.revisionNumber === 0) return;
+      const previous = chain.find((quote) => quote.revisionNumber === revision.revisionNumber - 1);
+      if (previous) deltaByQuoteId.set(revision.id, quoteTotalCents(revision) - quoteTotalCents(previous));
+    });
+  });
+  const currentQuotes = currentQuoteProjection(quotes).currentIssuedQuotes;
+  return { currentQuotes, totalCents: currentQuotes.reduce((total, quote) => total + quoteTotalCents(quote), 0), deltaByQuoteId };
+}
 export function formatMoney(cents: number) { return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(cents / 100); }
 
 export function materializeNumericInputs(quote: Quote, drafts: NumericInputDrafts): Quote {

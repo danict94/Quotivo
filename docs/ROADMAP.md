@@ -150,6 +150,34 @@ A ogni scope aggiungere:
 - problemi aperti;
 - prossimo passo.
 
+### 14 ottobre 2026 â€” Step 0A: guardrail qualitÃ  locali
+
+- Aggiunte le devDependency locali `jscpd`, `dependency-cruiser` e `knip`, con gli script `code:lines`, `code:duplicates`, `code:cycles`, `code:dead` e `code:guard`.
+- Il controllo righe avvisa oltre 400 righe e fallisce oltre 600; esclude dipendenze, build, generati, artefatti nativi e SQL di migrazione.
+- `dependency-cruiser` applica al momento soltanto il divieto di cicli; non definisce boundary architetturali.
+- Verifica: `npm run code:guard` eseguito. Warning righe per `App.tsx` (544) e `tests/reliability.test.ts` (453); 1 duplicazione; nessun ciclo; Knip ha rilevato file/export/dipendenze potenzialmente inutilizzati e dipendenze non dichiarate. Nessun refactor o rimozione eseguiti.
+
+### 14 ottobre 2026 â€” Step 0B: calibrazione Knip
+
+- Aggiunto `knip.json` con gli entrypoint effettivi Expo, test, script, config plugin, route Vercel e funzioni Edge Supabase; non vengono ignorate directory sorgenti.
+- `expo-updates` e `expo-system-ui` sono falsi positivi del parser di configurazione Expo: non esistono import diretti. Gli URL `https://esm.sh/*` delle Edge Function sono dipendenze Deno compatibili, non pacchetti npm locali.
+- `jszip` Ã¨ invece un import diretto di `tests/reliability.test.ts` ed Ã¨ stato dichiarato come devDependency. Nessun file o export viene rimosso in questo scope.
+- Dopo la calibrazione Knip segnala 8 export e 7 tipi non usati esternamente: sono candidati reali o API di compatibilitÃ  da valutare in uno scope dedicato, non falsi positivi di entrypoint.
+
+### 14 ottobre 2026 â€” Step 0C: chiusura debt Knip corrente
+
+### 14 ottobre 2026 â€” Step 1: modello dati revisioni
+
+- Migrazione locale 14: aggiunte a `quotes` root, parent e numero revisione; i dati esistenti ricevono i default Rev.0 senza riscrittura.
+- Trigger SQLite e indice parziale impediscono riferimenti incoerenti, self-reference, parent non consecutivo e duplicazione del numero revisione per root. La separazione database per account Ã¨ il confine owner dei riferimenti locali.
+- Nessuna UI, clonazione, calculator, PDF, share o catalogo recenti. Verifiche: `npm test` 66/66 e `npm run typecheck` superati; `code:guard` e `git diff --check` da eseguire a chiusura scope.
+- Chiusura: `npm run code:guard` e `git diff --check` superati; `src/migrations.ts` (433 righe) Ã¨ un warning, non supera la soglia bloccante di 600.
+- Step 2: `CreateRevisionUseCase` crea esclusivamente una nuova bozza dalla snapshot dell'ultima emissione della catena, con ID nuovi e valori economici/cliente storici. L'inserimento Ã¨ transazionale e l'indice unico protegge da collisioni; nessuna UI, PDF, share o emissione revisionata Ã¨ stata aggiunta.
+
+- Rimossi come dead safe: export di `isExpoGoRuntime` e `itemBaseCents`, funzione `legacyTransferContainsAll` senza consumatori e token `shadows` inutilizzato.
+- Mantenuti e annotati `@public`: re-export DOCX di compatibilitÃ ; contratti persistiti/documentali (`QuoteStatus`, `PriceMode`, `VatTreatment`, `EconomicLine`, `VatGroup`, `DocumentMode`); stato bootstrap, comparatore versioni e primitive UI `Card`/`Section`.
+- Verifiche: `npm run code:dead`, `npm run typecheck`, `npm run code:guard` e `git diff --check` superati. Nessun refactor, feature o modifica a `App.tsx`/test di affidabilitÃ .
+
 ### 11 settembre 2026 — Correzione barra di navigazione mobile
 
 - File modificati: `quotivo-mobile/App.tsx`, dipendenze npm.

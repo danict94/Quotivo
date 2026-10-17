@@ -3,11 +3,13 @@ import { addCalendarDays, captureEmissionClock } from '../emissionClock';
 import { calculateEconomics, EconomicResult, Quote, QuoteItem } from '../domain';
 
 export const STANDARD_RENDERER_VERSION = 'standard-a4-v1';
+/** @public Modalità del document model condiviso dai renderer. */
 export type DocumentMode = 'draft' | 'final';
 export type DocumentBusiness = BusinessProfile & { logoDataBase64?: string | null };
 export type StandardDocumentModel = {
   rendererVersion: typeof STANDARD_RENDERER_VERSION; mode: DocumentMode; quoteId: string;
   numberLabel: string | null; issueDate: string; validUntil: string; business: DocumentBusiness;
+  revisionNumber: number; originalIssueDate: string | null; revisionDate: string | null; replacedRevisionNumber: number | null; replacedIssueDate: string | null;
   client: string; clientContactName:string; clientPhone:string; clientEmail:string; clientAddress:string; clientTaxId:string; clientVatNumber:string; siteAddress:string; title: string; introduction: string; items: QuoteItem[]; baseEconomics: EconomicResult;
   conditions: string; paymentTerms: string;
 };
@@ -18,6 +20,7 @@ export function buildDraftDocumentModel(quote: Quote, business: DocumentBusiness
   const clock = captureEmissionClock(now);
   return { rendererVersion:STANDARD_RENDERER_VERSION, mode:'draft', quoteId:quote.id, numberLabel:null,
     issueDate:clock.localDate, validUntil:addCalendarDays(clock.localDate,business.defaultValidityDays), business,
+    revisionNumber:quote.revisionNumber, originalIssueDate:null, revisionDate:null, replacedRevisionNumber:null, replacedIssueDate:null,
     client:quote.client.trim(), clientContactName:quote.clientContactName.trim(), clientPhone:quote.clientPhone.trim(), clientEmail:quote.clientEmail.trim(), clientAddress:quote.clientAddress.trim(), clientTaxId:quote.clientTaxId.trim(), clientVatNumber:quote.clientVatNumber.trim(), siteAddress:quote.siteAddress.trim(), title:quote.title.trim(), introduction:quote.introduction.trim(), items:quote.items,
     baseEconomics:calculateEconomics(quote.items,quote.globalDiscountBasisPoints),
     conditions:business.defaultConditions.trim(), paymentTerms:business.defaultPaymentTerms.trim() };
@@ -31,8 +34,11 @@ export function buildFinalDocumentModel(snapshot: unknown): StandardDocumentMode
   if (!Array.isArray(items) || !business || typeof business !== 'object') throw new Error('Snapshot emesso incompleto.');
   const stored=value.economics as EconomicResult;
   if (!stored || typeof stored.totalCents !== 'number') throw new Error('Risultato economico dello snapshot assente.');
+  const revisionNumber=typeof value.revisionNumber === 'number' && Number.isInteger(value.revisionNumber) ? value.revisionNumber : 0;
+  const replacedRevisionNumber=typeof value.replacedRevisionNumber === 'number' && Number.isInteger(value.replacedRevisionNumber) ? value.replacedRevisionNumber : revisionNumber > 0 ? revisionNumber - 1 : null;
   return { rendererVersion:STANDARD_RENDERER_VERSION, mode:'final', quoteId:String(value.id),
     numberLabel:numberLabel(value.number as number,value.numberYear as number), issueDate:String(value.issuedLocalDate), validUntil:String(value.validUntil),
+    revisionNumber, originalIssueDate:revisionNumber > 0 ? String(value.originalIssuedLocalDate??value.issuedLocalDate) : null, revisionDate:revisionNumber > 0 ? String(value.revisionIssuedLocalDate??value.issuedLocalDate) : null, replacedRevisionNumber, replacedIssueDate:revisionNumber > 0 ? String(value.replacedIssuedLocalDate??value.issuedLocalDate) : null,
     business, client:String(value.client??''), clientContactName:String(value.clientContactName??''), clientPhone:String(value.clientPhone??''), clientEmail:String(value.clientEmail??''), clientAddress:String(value.clientAddress??''), clientTaxId:String(value.clientTaxId??''), clientVatNumber:String(value.clientVatNumber??''), siteAddress:String(value.siteAddress??''), title:String(value.title??''), introduction:String(value.introduction??''), items,
     baseEconomics:stored,
     conditions:String(business.defaultConditions??''), paymentTerms:String(business.defaultPaymentTerms??'') };

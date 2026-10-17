@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "entry": [
+    "App.tsx",
+    "tests/**/*.test.ts",
+    "scripts/**/*.{js,cjs,mjs}",
+    "plugins/**/*.{js,cjs,mjs}",
+    "public-gateway/api/**/*.js",
+    "supabase/functions/**/index.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "tests/**/*.test.ts",
+    "scripts/**/*.{js,cjs,mjs}",
+    "plugins/**/*.{js,cjs,mjs}",
+    "public-gateway/api/**/*.js",
+    "supabase/functions/**/index.ts"
+  ],
+  "ignoreDependencies": [
+    "expo-updates",
+    "expo-system-ui"
+  ],
+  "ignoreBinaries": [
+    "gradlew.bat"
+  ]
+}

@@ -4,7 +4,8 @@ import initSqlJs, { Database } from 'sql.js';
 import { Packer } from 'docx';
 import JSZip from 'jszip';
 import { calculateEconomics, createEmptyQuoteItem, hasMeaningfulDraftContent, materializeNumericInputs, numericInputKey, parseDecimal, parseScaledDecimal, Quote } from '../src/domain';
-import { runMigrations } from '../src/migrations';
+import { migrations, runMigrations } from '../src/migrations';
+import { assertDraftDeletable, DraftDeletionIntegrityError } from '../src/features/quotes/draftDeletionIntegrity';
 import { BindValue, finalizeQuoteData, QuoteTransaction, replaceDraftData } from '../src/quoteTransactions';
 import { validateLogoBytes } from '../src/logoValidation';
 import { addCalendarDays, EmissionClock, formatQuoteNumber } from '../src/emissionClock';
@@ -38,7 +39,7 @@ const finalizationContext = { clock, validUntil: '2026-10-11', businessProfile: 
 
 function quote(id = 'q-1'): Quote {
   return {
-    id, number: null, numberYear: null, clientId:null, client: 'Cliente', clientContactName:'', clientPhone:'', clientEmail:'', clientAddress:'', clientTaxId:'', clientVatNumber:'', siteAddress:'', title: 'Lavori', introduction: '', defaultVatBasisPoints:1000, globalDiscountBasisPoints: 0, status: 'draft',
+    id, number: null, numberYear: null, clientId:null, client: 'Cliente', clientContactName:'', clientPhone:'', clientEmail:'', clientAddress:'', clientTaxId:'', clientVatNumber:'', siteAddress:'', title: 'Lavori', introduction: '', defaultVatBasisPoints:1000, revisionRootQuoteId:null, parentQuoteId:null, revisionNumber:0, globalDiscountBasisPoints: 0, status: 'draft',
     createdAt: now, updatedAt: now, issuedAt: null,
     issuedLocalDate: null, issuedOffsetMinutes: null, validUntil: null,
     items: [{ ...createEmptyQuoteItem(`${id}-item`, 0), description: 'Posa', unit: 'm²', unitCode: 'sqm', unitPriceCents: 1000 }],
@@ -218,7 +219,7 @@ test('Migrazione Standard conserva righe legacy e inizializza unità e aliquote 
   assert.deepEqual(await adapter.getFirstAsync("SELECT rate_basis_points, is_custom FROM vat_rates WHERE code = 'vat-6-legacy'"), {rate_basis_points:600,is_custom:1});
   assert.equal((await adapter.getFirstAsync<{count:number}>('SELECT COUNT(*) AS count FROM measurement_units'))?.count, 8);
   assert.equal((await adapter.getFirstAsync<{count:number}>('SELECT COUNT(*) AS count FROM vat_rates'))?.count, 5);
-  assert.equal((await adapter.getFirstAsync<{user_version:number}>('PRAGMA user_version'))?.user_version,11);
+  assert.equal((await adapter.getFirstAsync<{user_version:number}>('PRAGMA user_version'))?.user_version, migrations.at(-1)?.version);
   assert.deepEqual(await adapter.getFirstAsync("SELECT client_address, site_address FROM quotes LIMIT 1"),null);
 });
 
@@ -300,6 +301,36 @@ test('Sequenze annuali ripartono da uno senza rinumerare gli anni precedenti', a
   assert.deepEqual(await adapter.getFirstAsync("SELECT number, number_year FROM quotes WHERE id = 'q-2027'"), { number: 1, number_year: 2027 });
 });
 
+test('Una revisione emessa riusa il numero della root senza avanzare la sequenza locale', async () => {
+  const adapter=await migratedDatabase();
+  await adapter.runAsync("INSERT INTO number_sequences (name, next_number) VALUES ('quotes:2026', 45)");
+  const root=quote('root-revision'); await insertDraft(adapter,root); assert.equal(await atomicFinalize(adapter,root),45);
+  const revision={...quote('revision-1'),revisionRootQuoteId:root.id,parentQuoteId:root.id,revisionNumber:1}; await insertDraft(adapter,revision); await adapter.runAsync('UPDATE quotes SET revision_root_quote_id=?, parent_quote_id=?, revision_number=? WHERE id=?',root.id,root.id,1,revision.id);
+  await adapter.execAsync('BEGIN IMMEDIATE');
+  const revisionClock: EmissionClock={instant:'2026-10-01T08:00:00.000Z',localDate:'2026-10-01',year:2026,offsetMinutes:120};
+  const revisionNumber=await finalizeQuoteData(adapter,revision,{...finalizationContext,clock:revisionClock,validUntil:'2026-10-31',businessProfile:{businessName:'Impresa Storica',defaultConditions:'',defaultPaymentTerms:''},canonicalNumber:45,canonicalYear:2026,revision:{rootQuoteId:root.id,parentQuoteId:root.id,revisionNumber:1}});
+  await adapter.execAsync('COMMIT');
+  assert.equal(revisionNumber,45);
+  assert.equal((await adapter.getFirstAsync<{next_number:number}>("SELECT next_number FROM number_sequences WHERE name='quotes:2026'"))?.next_number,46);
+  const snapshot=await adapter.getFirstAsync<{snapshot_json:string}>("SELECT snapshot_json FROM issued_quote_snapshots WHERE quote_id='revision-1'");
+  const revisionSnapshot=JSON.parse(snapshot!.snapshot_json);
+  assert.deepEqual(revisionSnapshot.revisionNumber,1);
+  assert.equal(revisionSnapshot.originalIssuedLocalDate,'2026-09-11');
+  assert.equal(revisionSnapshot.revisionIssuedLocalDate,'2026-10-01');
+  assert.equal(revisionSnapshot.replacedRevisionNumber,0);
+  assert.equal(revisionSnapshot.replacedIssuedLocalDate,'2026-09-11');
+  assert.equal(revisionSnapshot.validUntil,'2026-10-31');
+  assert.equal('documentSignature' in revisionSnapshot,false);
+  const revisionHtml=renderStandardHtml(buildFinalDocumentModel(revisionSnapshot));
+  assert.match(revisionHtml,/Preventivo 45\/2026 — Revisione 1/);
+  assert.match(revisionHtml,/Data emissione originale 2026-09-11/);
+  assert.match(revisionHtml,/Data revisione 2026-10-01/);
+  assert.match(revisionHtml,/Documento revisionato: Rev\. 0 del 2026-09-11/);
+  assert.doesNotMatch(revisionHtml,/Firma dell'impresa/);
+  const normal=quote('normal-after-revision'); await insertDraft(adapter,normal); assert.equal(await atomicFinalize(adapter,normal),46);
+  assert.equal((await adapter.getFirstAsync<{count:number}>('SELECT COUNT(*) AS count FROM issued_quote_snapshots'))?.count,3);
+});
+
 test('Errore durante lo snapshot annulla dati, numero e contatore', async () => {
   const adapter = await migratedDatabase();
   const value = quote();
@@ -344,7 +375,11 @@ test('Documento definitivo deriva da snapshot schema 3 e usa lo stesso risultato
   const row=await adapter.getFirstAsync<{snapshot_json:string}>("SELECT snapshot_json FROM issued_quote_snapshots WHERE quote_id='pdf-final'");
   const model=buildFinalDocumentModel(JSON.parse(row!.snapshot_json)); const html=renderStandardHtml(model);
   assert.equal(model.numberLabel,'1/2026'); assert.equal(model.mode,'final'); assert.equal(model.baseEconomics.totalCents,calculateEconomics(value.items,0).totalCents);
+  assert.equal(model.revisionNumber,0); assert.equal(model.originalIssueDate,null); assert.equal(model.revisionDate,null); assert.equal(model.replacedRevisionNumber,null); assert.equal(model.replacedIssueDate,null);
   assert.doesNotMatch(html,/BOZZA/); assert.match(html,/N\. 1\/2026/); assert.match(html,/Pagina 1 di \d+/); assert.doesNotMatch(html,/counter\((?:page|pages)\)|Pagina 0 di 0/);
+  const historicalSnapshot=JSON.parse(row!.snapshot_json);
+  const historicalHtml=renderStandardHtml(buildFinalDocumentModel(historicalSnapshot));
+  assert.doesNotMatch(historicalHtml,/Firma dell'impresa/);
 });
 
 test('Renderer Standard mantiene inclusioni ed esclusioni nella sola lavorazione', () => {
@@ -369,6 +404,19 @@ test('Renderer Standard crea pagine esplicite con footer coerenti e intestazioni
   const pageCount=(html.match(/<section class="sheet">/g)??[]).length;
   assert.ok(pageCount>=2); assert.match(html,new RegExp(`Pagina 1 di ${pageCount}`)); assert.match(html,new RegExp(`Pagina ${pageCount} di ${pageCount}`));
   assert.equal((html.match(/<thead>/g)??[]).length,(html.match(/<table class="work-table(?: [^"]+)?">/g)??[]).length); assert.doesNotMatch(html,/Pagina 0 di 0/);
+});
+
+test('Renderer Standard spezza contenuti dinamici prima del footer e conserva tutte le pagine', () => {
+  const value=quote('pdf-long');
+  const longNote=Array.from({length:90},(_,index)=>`Nota tecnica ${index+1}: lavorazione eseguita con materiali e condizioni specifiche del cantiere.`).join(' ');
+  value.items=Array.from({length:16},(_,index)=>({...createEmptyQuoteItem(`long-${index}`,index),description:`Lavorazione ${index+1} con descrizione molto articolata per il preventivo`,shortDescription:longNote.slice(0,740),technicalDetails:longNote.slice(740,1480),inclusions:longNote.slice(1480,1880),quantityScaled:10000,unit:'pz',unitPriceCents:1000,vatRateBasisPoints:2200}));
+  const business={businessName:'Impresa',taxId:'',vatNumber:'',address:'',postalCode:'',city:'',province:'',email:'',phone:'',website:'',defaultConditions:longNote,defaultValidityDays:30,defaultPaymentTerms:longNote,logoUri:null,logoMimeType:null,logoOriginalName:null,logoDataBase64:null};
+  const html=renderStandardHtml(buildDraftDocumentModel(value,business,new Date('2026-09-12T10:00:00+02:00')));
+  const pageLabels=[...html.matchAll(/Pagina (\d+) di (\d+)/g)].map((match)=>({page:Number(match[1]),total:Number(match[2])}));
+  assert.ok(pageLabels.length>=3);
+  pageLabels.forEach((label,index)=>assert.deepEqual(label,{page:index+1,total:pageLabels.length}));
+  assert.equal((html.match(/<thead>/g)??[]).length,(html.match(/<table class="work-table(?: [^"]+)?">/g)??[]).length);
+  assert.match(html,/Condizioni/); assert.match(html,/Pagamenti/); assert.match(html,/Firma per accettazione/);
 });
 
 test('Renderer Standard non sposta prematuramente otto lavorazioni semplici alla pagina seguente', () => {
@@ -436,4 +484,17 @@ test('Eliminare una bozza rimuove soltanto la bozza e le sue lavorazioni', async
   await adapter.runAsync("DELETE FROM quotes WHERE id = ? AND status = 'draft'", value.id);
   assert.equal(await adapter.getFirstAsync('SELECT id FROM quotes WHERE id = ?', value.id), null);
   assert.equal(await adapter.getFirstAsync('SELECT id FROM quote_items WHERE quote_id = ?', value.id), null);
+});
+
+test('Una bozza con snapshot o export emesso viene rifiutata prima della DELETE con diagnostica di integrità', async () => {
+  const adapter = await migratedDatabase();
+  const value = quote('corrupt-draft');
+  await insertDraft(adapter, value);
+  await adapter.runAsync("INSERT INTO issued_quote_snapshots (quote_id, schema_version, snapshot_json, created_at) VALUES (?, 3, '{}', ?)", value.id, now);
+  await adapter.runAsync("INSERT INTO document_exports (quote_id, renderer_version, file_uri, status, error_message, created_at, updated_at) VALUES (?, 'standard-v1', NULL, 'failed', NULL, ?, ?)", value.id, now, now);
+  await assert.rejects(
+    () => assertDraftDeletable(adapter, value.id),
+    (error: unknown) => error instanceof DraftDeletionIntegrityError && error.code === 'INTEGRITY_DRAFT_HAS_ISSUED_ARTIFACTS' && error.diagnostic.snapshotCount === 1 && error.diagnostic.documentExportCount === 1,
+  );
+  assert.notEqual(await adapter.getFirstAsync('SELECT id FROM quotes WHERE id = ?', value.id), null);
 });

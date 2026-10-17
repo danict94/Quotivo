@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../ui/components';
 import { Icon } from '../ui/Icon';
 
-export function isExpoGoRuntime(){ return Constants.executionEnvironment===ExecutionEnvironment.StoreClient; }
+function isExpoGoRuntime(){ return Constants.executionEnvironment===ExecutionEnvironment.StoreClient; }
 export function PdfPreview({uri,title,onClose}:{uri:string;title:string;onClose:()=>void}) {
   const insets=useSafeAreaInsets();
   useEffect(()=>{const listener=BackHandler.addEventListener('hardwareBackPress',()=>{onClose();return true;});return()=>listener.remove();},[onClose]);

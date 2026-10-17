@@ -1,0 +1,16 @@
+{
+  "path": ["src", "tests", "scripts", "App.tsx"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/generated/**",
+    "**/android/**",
+    "**/ios/**",
+    "**/migrations/**/*.sql",
+    "**/package-lock.json"
+  ],
+  "reporters": ["console"],
+  "minLines": 5,
+  "minTokens": 50
+}

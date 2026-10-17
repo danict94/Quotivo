@@ -81,6 +81,14 @@ Non dichiarare Android, iOS o esportazioni verificati senza averli provati.
 
 Se non è possibile eseguire un controllo, indicarlo esplicitamente.
 
+## Quote lifecycle invariants
+
+Quote lifecycle invariants are mandatory: never infer `ISSUED` from local artifacts alone; use `ReconcileIssuedQuoteUseCase` for local↔remote recovery.
+
+## Account lifecycle invariants
+
+`public.account_lifecycle` is the only server-side account availability source. Every server-side write must call `assert_account_active`; a deactivated account preserves history but cannot issue, share, change numbering, upload documents, or expose public links.
+
 ## Chiusura di ogni scope
 
 Aggiornare ROADMAP.md con stato reale, verifiche e problemi aperti.

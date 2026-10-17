@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { Share } from 'react-native';
 import { loadDocumentExport, loadIssuedSnapshot } from '../database';
 import { buildFinalDocumentModel } from './documentModel';
 import { issuedExportName } from './pdfNaming';
@@ -13,4 +14,7 @@ export async function prepareFinalPdfForShare(quoteId:string) {
 export async function shareDocument(uri:string,mimeType:string,title:string) {
   if(!await Sharing.isAvailableAsync()) throw new Error('La condivisione non è disponibile su questo dispositivo.');
   await Sharing.shareAsync(uri,{mimeType,dialogTitle:title,UTI:mimeType});
+}
+export async function shareQuoteLink(url:string) {
+  await Share.share({ message:url, url, title:'Invia con Quotivo' },{ dialogTitle:'Invia con Quotivo' });
 }

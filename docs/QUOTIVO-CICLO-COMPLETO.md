@@ -190,6 +190,16 @@ Procedere senza chiedere conferma a ogni incremento; fermarsi solo per blocchi r
 
 Distinguere test automatici, bundle, prove su dispositivo e controlli non eseguiti. Un bundle riuscito non prova visualizzatore, condivisione o impaginazione.
 
+## Emissione e reconciliation locale↔remoto
+
+Non inferire mai lo stato `issued` da PDF o snapshot locali. Un'emissione è provata esclusivamente da una issuance Supabase unica e coerente per owner, `client_quote_id`, revisione, numero/anno, `issued_at` e documento. La reconciliation è transazionale e idempotente: non crea issuance, numeri o PDF e deve superare il post-check di quote, artefatti e foreign key.
+
+## Account lifecycle server-side
+
+`account_lifecycle` is the only server-side account availability source: existing and new accounts start `ACTIVE`; `DEACTIVATED` preserves history, PDFs and tokens but blocks every writer, upload and public link through `assert_account_active`. The state transition is idempotent, server-side and never deletes data.
+
+The app caches lifecycle only to describe the account in Settings. Deactivate/reactivate always call the server use cases; offline never changes local lifecycle authority or removes local SQLite data.
+
 ## 18. Consegna di ogni incremento
 
 Aggiornare ROADMAP/HANDOFF con funzioni reali, verifiche, limiti e prossimo passo. Restituire una breve prova guidata su Expo Go o development build, spiegando quale ambiente è stato effettivamente verificato. Mantenere traccia dei requisiti rimanenti fino al completamento.

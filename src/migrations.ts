@@ -331,6 +331,93 @@ export const migrations: Migration[] = [
       BEGIN SELECT RAISE(ABORT, 'I preventivi emessi sono immutabili'); END;
     `,
   },
+  { version: 12, sql: `
+    CREATE TABLE quote_share_links (
+      quote_id TEXT PRIMARY KEY NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+      issuance_id TEXT, active_share_id TEXT, share_status_cache TEXT,
+      share_synced_at TEXT
+    );
+  ` },
+  { version: 13, sql: `
+    ALTER TABLE quote_share_links ADD COLUMN share_id TEXT;
+    ALTER TABLE quote_share_links ADD COLUMN share_lifecycle_cache TEXT;
+    ALTER TABLE quote_share_links ADD COLUMN commercial_outcome_cache TEXT;
+    ALTER TABLE quote_share_links ADD COLUMN opened_at_cache TEXT;
+    UPDATE quote_share_links SET
+      share_id = active_share_id,
+      share_lifecycle_cache = CASE share_status_cache
+        WHEN 'REVOKED' THEN 'REVOKED'
+        WHEN 'SUPERSEDED' THEN 'SUPERSEDED'
+        ELSE 'ACTIVE'
+      END,
+      commercial_outcome_cache = CASE share_status_cache
+        WHEN 'ACCEPTED' THEN 'ACCEPTED'
+        WHEN 'REJECTED' THEN 'REJECTED'
+        ELSE 'PENDING'
+      END,
+      opened_at_cache = NULL;
+  ` },
+  { version: 14, sql: `
+    ALTER TABLE quotes ADD COLUMN revision_root_quote_id TEXT;
+    ALTER TABLE quotes ADD COLUMN parent_quote_id TEXT;
+    ALTER TABLE quotes ADD COLUMN revision_number INTEGER NOT NULL DEFAULT 0 CHECK (revision_number >= 0);
+
+    CREATE INDEX quotes_revision_root_quote_id ON quotes(revision_root_quote_id);
+    CREATE INDEX quotes_parent_quote_id ON quotes(parent_quote_id);
+    CREATE UNIQUE INDEX quotes_revision_root_number_unique ON quotes(revision_root_quote_id, revision_number)
+      WHERE revision_number > 0;
+
+    CREATE TRIGGER validate_quote_revision_insert BEFORE INSERT ON quotes
+    BEGIN
+      SELECT CASE WHEN NEW.revision_number = 0 AND (NEW.revision_root_quote_id IS NOT NULL OR NEW.parent_quote_id IS NOT NULL)
+        THEN RAISE(ABORT, 'Rev.0 non puo avere root o parent') END;
+      SELECT CASE WHEN NEW.revision_number > 0 AND (NEW.revision_root_quote_id IS NULL OR NEW.parent_quote_id IS NULL)
+        THEN RAISE(ABORT, 'Le revisioni devono avere root e parent') END;
+      SELECT CASE WHEN NEW.revision_number > 0 AND (NEW.revision_root_quote_id = NEW.id OR NEW.parent_quote_id = NEW.id)
+        THEN RAISE(ABORT, 'Una revisione non puo puntare a se stessa') END;
+      SELECT CASE WHEN NEW.revision_number > 0 AND NOT EXISTS (
+        SELECT 1 FROM quotes root WHERE root.id = NEW.revision_root_quote_id AND root.revision_number = 0
+      ) THEN RAISE(ABORT, 'La root della revisione deve essere una Rev.0 locale') END;
+      SELECT CASE WHEN NEW.revision_number > 0 AND NOT EXISTS (
+        SELECT 1 FROM quotes parent WHERE parent.id = NEW.parent_quote_id
+          AND parent.revision_number = NEW.revision_number - 1
+          AND (parent.id = NEW.revision_root_quote_id OR parent.revision_root_quote_id = NEW.revision_root_quote_id)
+      ) THEN RAISE(ABORT, 'Il parent deve essere la revisione locale precedente') END;
+    END;
+
+    CREATE TRIGGER validate_quote_revision_update BEFORE UPDATE OF revision_root_quote_id, parent_quote_id, revision_number ON quotes
+    BEGIN
+      SELECT CASE WHEN OLD.status = 'issued' THEN RAISE(ABORT, 'La cronologia di un preventivo emesso e immutabile') END;
+      SELECT CASE WHEN NEW.revision_number = 0 AND (NEW.revision_root_quote_id IS NOT NULL OR NEW.parent_quote_id IS NOT NULL)
+        THEN RAISE(ABORT, 'Rev.0 non puo avere root o parent') END;
+      SELECT CASE WHEN NEW.revision_number > 0 AND (NEW.revision_root_quote_id IS NULL OR NEW.parent_quote_id IS NULL)
+        THEN RAISE(ABORT, 'Le revisioni devono avere root e parent') END;
+      SELECT CASE WHEN NEW.revision_number > 0 AND (NEW.revision_root_quote_id = NEW.id OR NEW.parent_quote_id = NEW.id)
+        THEN RAISE(ABORT, 'Una revisione non puo puntare a se stessa') END;
+      SELECT CASE WHEN NEW.revision_number > 0 AND NOT EXISTS (
+        SELECT 1 FROM quotes root WHERE root.id = NEW.revision_root_quote_id AND root.revision_number = 0
+      ) THEN RAISE(ABORT, 'La root della revisione deve essere una Rev.0 locale') END;
+      SELECT CASE WHEN NEW.revision_number > 0 AND NOT EXISTS (
+        SELECT 1 FROM quotes parent WHERE parent.id = NEW.parent_quote_id
+          AND parent.revision_number = NEW.revision_number - 1
+          AND (parent.id = NEW.revision_root_quote_id OR parent.revision_root_quote_id = NEW.revision_root_quote_id)
+      ) THEN RAISE(ABORT, 'Il parent deve essere la revisione locale precedente') END;
+    END;
+  ` },
+  { version:15, sql:`
+    DROP TRIGGER IF EXISTS prevent_issued_quote_update; DROP TRIGGER IF EXISTS prevent_issued_quote_delete; DROP TRIGGER IF EXISTS prevent_issued_item_insert; DROP TRIGGER IF EXISTS prevent_issued_item_update; DROP TRIGGER IF EXISTS prevent_issued_item_delete; DROP TRIGGER IF EXISTS prevent_issued_snapshot_update; DROP TRIGGER IF EXISTS prevent_issued_snapshot_delete; DROP TRIGGER IF EXISTS prevent_document_export_delete; DROP TRIGGER IF EXISTS validate_quote_revision_insert; DROP TRIGGER IF EXISTS validate_quote_revision_update;
+    CREATE TABLE quotes_v15 (id TEXT PRIMARY KEY NOT NULL,number INTEGER,number_year INTEGER,client TEXT NOT NULL DEFAULT '',title TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','issued')),created_at TEXT NOT NULL,updated_at TEXT NOT NULL,issued_at TEXT,issued_local_date TEXT,issued_offset_minutes INTEGER,valid_until TEXT,introduction TEXT NOT NULL DEFAULT '',global_discount_basis_points INTEGER NOT NULL DEFAULT 0 CHECK(global_discount_basis_points BETWEEN 0 AND 10000),client_address TEXT NOT NULL DEFAULT '',site_address TEXT NOT NULL DEFAULT '',client_id TEXT REFERENCES clients(id) ON DELETE SET NULL,default_vat_basis_points INTEGER NOT NULL DEFAULT 1000 CHECK(default_vat_basis_points BETWEEN 0 AND 100000),client_contact_name TEXT NOT NULL DEFAULT '',client_phone TEXT NOT NULL DEFAULT '',client_email TEXT NOT NULL DEFAULT '',client_tax_id TEXT NOT NULL DEFAULT '',client_vat_number TEXT NOT NULL DEFAULT '',revision_root_quote_id TEXT,parent_quote_id TEXT,revision_number INTEGER NOT NULL DEFAULT 0 CHECK(revision_number>=0),CHECK((status='draft' AND number IS NULL AND number_year IS NULL AND issued_at IS NULL) OR (status='issued' AND number IS NOT NULL AND issued_at IS NOT NULL)));
+    CREATE TABLE quote_items_v15 (id TEXT PRIMARY KEY NOT NULL,quote_id TEXT NOT NULL REFERENCES quotes_v15(id) ON DELETE CASCADE,description TEXT NOT NULL DEFAULT '',quantity REAL NOT NULL DEFAULT 1 CHECK(quantity>=0),unit TEXT NOT NULL DEFAULT 'pz',unit_price_cents INTEGER NOT NULL DEFAULT 0 CHECK(unit_price_cents>=0),position INTEGER NOT NULL DEFAULT 0,short_description TEXT NOT NULL DEFAULT '',price_mode TEXT NOT NULL DEFAULT 'measured' CHECK(price_mode IN ('measured','body')),quantity_scaled INTEGER,unit_code TEXT,body_price_cents INTEGER NOT NULL DEFAULT 0 CHECK(body_price_cents>=0),vat_treatment TEXT NOT NULL DEFAULT 'not_applied' CHECK(vat_treatment IN ('rate','not_applied')),vat_rate_basis_points INTEGER,vat_note TEXT NOT NULL DEFAULT '',line_discount_basis_points INTEGER NOT NULL DEFAULT 0 CHECK(line_discount_basis_points BETWEEN 0 AND 10000),technical_details TEXT NOT NULL DEFAULT '',inclusions TEXT NOT NULL DEFAULT '',exclusions TEXT NOT NULL DEFAULT '',is_optional INTEGER NOT NULL DEFAULT 0 CHECK(is_optional IN (0,1)),confirmed INTEGER NOT NULL DEFAULT 1 CHECK(confirmed IN (0,1)));
+    CREATE TABLE issued_quote_snapshots_v15 (quote_id TEXT PRIMARY KEY NOT NULL REFERENCES quotes_v15(id),schema_version INTEGER NOT NULL,snapshot_json TEXT NOT NULL,created_at TEXT NOT NULL); CREATE TABLE document_exports_v15 (quote_id TEXT PRIMARY KEY NOT NULL REFERENCES quotes_v15(id),renderer_version TEXT NOT NULL,file_uri TEXT,status TEXT NOT NULL CHECK(status IN ('ready','failed')),error_message TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL); CREATE TABLE quote_share_links_v15 (quote_id TEXT PRIMARY KEY NOT NULL REFERENCES quotes_v15(id) ON DELETE CASCADE,issuance_id TEXT,active_share_id TEXT,share_status_cache TEXT,share_synced_at TEXT,share_id TEXT,share_lifecycle_cache TEXT,commercial_outcome_cache TEXT,opened_at_cache TEXT);
+    INSERT INTO quotes_v15 SELECT id,number,number_year,client,title,status,created_at,updated_at,issued_at,issued_local_date,issued_offset_minutes,valid_until,introduction,global_discount_basis_points,client_address,site_address,client_id,default_vat_basis_points,client_contact_name,client_phone,client_email,client_tax_id,client_vat_number,revision_root_quote_id,parent_quote_id,revision_number FROM quotes; INSERT INTO quote_items_v15 SELECT * FROM quote_items; INSERT INTO issued_quote_snapshots_v15 SELECT * FROM issued_quote_snapshots; INSERT INTO document_exports_v15 SELECT * FROM document_exports; INSERT INTO quote_share_links_v15 SELECT * FROM quote_share_links;
+    DROP TABLE quote_share_links; DROP TABLE document_exports; DROP TABLE issued_quote_snapshots; DROP TABLE quote_items; DROP TABLE quotes; ALTER TABLE quotes_v15 RENAME TO quotes; ALTER TABLE quote_items_v15 RENAME TO quote_items; ALTER TABLE issued_quote_snapshots_v15 RENAME TO issued_quote_snapshots; ALTER TABLE document_exports_v15 RENAME TO document_exports; ALTER TABLE quote_share_links_v15 RENAME TO quote_share_links;
+    CREATE UNIQUE INDEX quotes_base_number_unique ON quotes(number_year,number) WHERE revision_number=0 AND number IS NOT NULL; CREATE INDEX quote_items_quote_position ON quote_items(quote_id,position); CREATE INDEX quotes_revision_root_quote_id ON quotes(revision_root_quote_id); CREATE INDEX quotes_parent_quote_id ON quotes(parent_quote_id); CREATE UNIQUE INDEX quotes_revision_root_number_unique ON quotes(revision_root_quote_id,revision_number) WHERE revision_number>0;
+    CREATE TRIGGER prevent_issued_quote_update BEFORE UPDATE ON quotes WHEN OLD.status='issued' AND NOT(NEW.client_id IS NULL AND OLD.client_id IS NOT NULL) BEGIN SELECT RAISE(ABORT,'I preventivi emessi sono immutabili'); END; CREATE TRIGGER prevent_issued_quote_delete BEFORE DELETE ON quotes WHEN OLD.status='issued' BEGIN SELECT RAISE(ABORT,'I preventivi emessi sono immutabili'); END; CREATE TRIGGER prevent_issued_item_insert BEFORE INSERT ON quote_items WHEN (SELECT status FROM quotes WHERE id=NEW.quote_id)='issued' BEGIN SELECT RAISE(ABORT,'I preventivi emessi sono immutabili'); END; CREATE TRIGGER prevent_issued_item_update BEFORE UPDATE ON quote_items WHEN (SELECT status FROM quotes WHERE id=OLD.quote_id)='issued' BEGIN SELECT RAISE(ABORT,'I preventivi emessi sono immutabili'); END; CREATE TRIGGER prevent_issued_item_delete BEFORE DELETE ON quote_items WHEN (SELECT status FROM quotes WHERE id=OLD.quote_id)='issued' BEGIN SELECT RAISE(ABORT,'I preventivi emessi sono immutabili'); END; CREATE TRIGGER prevent_issued_snapshot_update BEFORE UPDATE ON issued_quote_snapshots BEGIN SELECT RAISE(ABORT,'Gli snapshot emessi sono immutabili'); END; CREATE TRIGGER prevent_issued_snapshot_delete BEFORE DELETE ON issued_quote_snapshots BEGIN SELECT RAISE(ABORT,'Gli snapshot emessi sono immutabili'); END; CREATE TRIGGER validate_quote_revision_insert BEFORE INSERT ON quotes WHEN NEW.revision_number>0 BEGIN SELECT CASE WHEN NEW.revision_root_quote_id IS NULL OR NEW.parent_quote_id IS NULL THEN RAISE(ABORT,'Le revisioni devono avere root e parent') WHEN NEW.revision_root_quote_id=NEW.id OR NEW.parent_quote_id=NEW.id THEN RAISE(ABORT,'Una revisione non puo puntare a se stessa') WHEN NOT EXISTS(SELECT 1 FROM quotes parent WHERE parent.id=NEW.parent_quote_id AND parent.revision_number=NEW.revision_number-1 AND (parent.id=NEW.revision_root_quote_id OR parent.revision_root_quote_id=NEW.revision_root_quote_id)) THEN RAISE(ABORT,'Il parent deve essere la revisione locale precedente') END; END;
+  ` },
+  { version: 16, sql: `
+    ALTER TABLE quote_share_links ADD COLUMN commercial_outcome_source_cache TEXT;
+    ALTER TABLE quote_share_links ADD COLUMN commercial_outcome_decided_at_cache TEXT;
+  ` },
 ];
 
 export interface MigrationDatabase {

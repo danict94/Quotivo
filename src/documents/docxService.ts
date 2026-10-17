@@ -4,6 +4,7 @@ import { StandardDocumentModel } from './documentModel';
 import { createDocxDocument } from './docxDocument';
 import { issuedExportName } from './pdfNaming';
 
+/** @public Re-export di compatibilità per i consumatori del servizio DOCX. */
 export { createDocxDocument } from './docxDocument';
 export async function generateFinalDocx(model:StandardDocumentModel) {
   const base64=await Packer.toBase64String(createDocxDocument(model)); const directory=new Directory(Paths.document,'issued-docx'); if(!directory.exists) directory.create({intermediates:true});

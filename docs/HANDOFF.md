@@ -252,3 +252,41 @@ La sorgente canonica nel repository è `asset/quotivo-logo-master.svg`, copia by
 `App.tsx` conserva layout mobile-first anche a larghezze ridotte: header e righe possono andare a capo, statistiche e campi compatti non richiedono spazio rigido, card e importi hanno aree flessibili. La tagline Home è stata rimossa. `PdfPreview.tsx` ha ora una X da 48px in safe area e registra `BackHandler` per chiudere esclusivamente l'anteprima; la precedente azione “Editor” non compare più.
 
 In Step 2 il nuovo bottom sheet “Scegli dal catalogo” non sostituisce i suggerimenti inline: ricerca tutte le voci con normalizzazione NFD (quindi `tint` trova “Tinteggiatura”), mostra prezzo/U.M. e richiama `copyCatalogItem`, mantenendo la copia indipendente. Test 34/34, TypeScript e `git diff --check` superati. Restano le prove visuali reali 320/360/390/430px, Light/Dark, Back gesture e apertura/chiusura del bottom sheet su Android.
+# Android release canonical workflow
+
+## Step 0A â€” Guardrail qualitÃ  locali (14 ottobre 2026)
+
+Sono disponibili gli script npm `code:lines`, `code:duplicates`, `code:cycles`, `code:dead` e l'aggregatore `code:guard`. Le configurazioni sono `.jscpd.json` e `.dependency-cruiser.cjs`; `scripts/check-code-lines.cjs` applica le soglie 400/600 righe e `scripts/code-guard.cjs` esegue ogni controllo anche quando uno precedente fallisce. I risultati Knip sono soltanto un inventario iniziale: non sono stati eliminati file, export o dipendenze e non sono stati introdotti boundary architetturali.
+
+## Step 0B â€” Calibrazione Knip (14 ottobre 2026)
+
+`knip.json` dichiara gli entrypoint runtime e dinamici: `App.tsx`, configurazione Expo, test, script, config plugin, API route Vercel e Edge Function Deno. Le due segnalazioni Expo senza import (`expo-updates`, `expo-system-ui`) sono ignorate nominativamente; gli import HTTPS di `esm.sh` restano dipendenze runtime Deno. `jszip` Ã¨ un uso diretto nei test ed Ã¨ devDependency esplicita. Restano 8 export e 7 tipi da classificare in un futuro scope; nessun refactor o cancellazione autorizzati o eseguiti.
+
+## Step 0C â€” Knip senza debt corrente (14 ottobre 2026)
+
+## Step 1 â€” Modello dati revisioni (14 ottobre 2026)
+
+`quotes` dispone ora di `revision_root_quote_id`, `parent_quote_id` e `revision_number`: la Rev.0 usa `0`/null/null, mentre Rev.1+ deve puntare alla root Rev.0 e al parent consecutivo. La migrazione 14 usa default retrocompatibili, indice parziale unico e trigger SQLite. Le banche dati locali sono isolate per account, dunque i riferimenti interni alla tabella `quotes` sono nello stesso owner. Non sono stati implementati clone, UI, emissione speciale, snapshot/PDF revisionati, share o recent items. Test del modello in `tests/revisionModel.test.ts`.
+
+## Step 2 â€” Bozza revisione da emesso (14 ottobre 2026)
+
+`CreateRevisionUseCase` legge `issued_quote_snapshots`, rifiuta sorgenti non emesse o non piÃ¹ ultime, crea nuovi ID per quote/righe e conserva cliente, righe, quantitÃ , U.M., prezzi, IVA e sconto storici. Il profilo/condizioni non viene letto dal profilo corrente: Ã¨ disponibile nel snapshot immutabile del parent. `createRevisionDraftFromIssuedQuote` Ã¨ l'adapter SQLite transazionale e `@public` come entry repository per il futuro comando UI; non Ã¨ ancora collegato alla UI. I test coprono Rev.0â†’draft Rev.1, Rev.1â†’draft Rev.2, prezzi/totale storici, ID nuovi, immutabilitÃ  sorgente e collisione.
+
+Knip ora passa senza finding. I simboli `@public` sono eccezioni per contratto e non ignore globali: `createDocxDocument` resta re-export di compatibilitÃ ; i tipi dominio/documento sono serializzati o persistiti; `ValidationState` e `compareVersions` sono contratti di feature; `Card` e `Section` sono primitive UI condivise. Sono stati rimossi solo `legacyTransferContainsAll`, `shadows` e i modifier `export` non necessari su `isExpoGoRuntime` e `itemBaseCents`. Non toccare queste annotazioni per far passare Knip senza verificare prima il relativo contratto.
+
+Usare esclusivamente `npm run android:release` per produrre l'APK standalone. Richiede JDK 17 e un `.env` gitignored con le due variabili Expo pubbliche Supabase. Non eseguire `gradlew clean` alla cieca né build release manuali con env impostate a mano: lo script carica l'ambiente, verifica Codegen e bundle, usa Gradle senza daemon e copia l'APK solo dopo il successo. Per il preflight rapido usare `npm run android:release:check`.
+
+## Varianti Android
+
+Stable resta `Quotivo` / `com.quotivo.app` / `quotivo`; sviluppo è `Quotivo Dev` / `com.quotivo.app.dev` / `quotivo-dev`. Usare `npm run android:dev` e `npm run start:dev` esclusivamente per la variante Dev. Le due app hanno sandbox Android distinte, quindi SQLite, AsyncStorage e SecureStore non sono condivisi. Aggiungere `quotivo-dev://auth/callback` alle Redirect URLs Supabase prima del primo Google login Dev.
+
+## Quote issuance
+
+`quote_issuance` è l'identità backend canonica dell'emissione autorizzata. Scope 6 collegherà snapshot pubblico, sharing e stato tramite `issuance_id`; non inserire questi concetti nel ledger quota.
+## Recenti lavorazioni — 16 ottobre 2026
+
+`src/features/recent-work-items/recentWorkItems.ts` deriva le lavorazioni dai preventivi emessi e sceglie una sola revisione corrente per chain; non aggiunge una tabella. Nell’editor, il bottom sheet Recenti offre Usa (copia modificabile) e Salva nel catalogo (normale controllo duplicati); una voce già catalogata è segnalata. Test 80/80, typecheck e code guard passano; resta una prova visiva Android del bottom sheet.
+
+## Scope 6B
+
+Migration remota 008 e Edge Function `quote-share-owner` / `quote-public` distribuite. Il dominio futuro resta configurato da `app_config.public_base_url`; prima dell'uso reale va instradato verso la Function pubblica, altrimenti usare temporaneamente l'endpoint Edge tecnico configurato. I token non sono in SQLite né in tabelle leggibili dall'app.
