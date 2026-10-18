@@ -1,8 +1,10 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { closeAccountDatabase } from '../../database';
 import { AuthRepository } from './AuthRepository';
 import { SupabaseAuthRepository } from './SupabaseAuthRepository';
 import { AuthState } from './AuthTypes';
+import { createSingleFlightLogout, performBoundedLogout } from './boundedLogout';
 
 type AuthContextValue = AuthState & {
   signUp(email: string, password: string): Promise<void>;
@@ -16,11 +18,23 @@ const authRepository: AuthRepository = new SupabaseAuthRepository();
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: 'restoring', session: null });
+  const logoutInProgress = useRef(false);
+  const logoutCoordinator = useRef<(() => Promise<void>) | null>(null);
+  if (!logoutCoordinator.current) logoutCoordinator.current = createSingleFlightLogout(async () => {
+    logoutInProgress.current = true;
+    try {
+      await performBoundedLogout({ remoteSignOut: () => authRepository.signOut(), closeLocalDatabase: closeAccountDatabase });
+      setState({ status: 'unauthenticated', session: null });
+    } finally {
+      logoutInProgress.current = false;
+    }
+  });
 
   useEffect(() => {
     let mounted = true;
     const applySession = (session: AuthState['session']) => {
       if (!mounted) return;
+      if (!session && logoutInProgress.current) return;
       setState(session ? { status: 'authenticated', session } : { status: 'unauthenticated', session: null });
     };
 
@@ -48,8 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({ status: 'authenticated', session });
     },
     signOut: async () => {
-      await authRepository.signOut();
-      setState({ status: 'unauthenticated', session: null });
+      return logoutCoordinator.current!();
     },
   }), [state]);
 

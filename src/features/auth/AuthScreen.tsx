@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../ui/theme';
 import { QuotivoMark } from '../../ui/QuotivoLogo';
@@ -12,6 +13,7 @@ export function AuthScreen() {
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState<'login' | 'signup' | 'google' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
   const styles = createStyles(theme);
 
   async function submit(mode: 'login' | 'signup') {
@@ -45,7 +47,8 @@ export function AuthScreen() {
     }
   }
 
-  return <SafeAreaView style={styles.safeArea}><KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+  return <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}><KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 + insets.bottom }]} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
     <View style={styles.card}>
       <View style={styles.mark}><QuotivoMark size={52} /></View>
       <Text style={styles.title}>Accedi a Quotivo</Text>
@@ -60,13 +63,15 @@ export function AuthScreen() {
       <Pressable disabled={pending !== null} style={[styles.google, pending !== null && styles.disabled]} onPress={() => void signInGoogle()}><Text style={styles.googleText}>{pending === 'google' ? 'Apertura Google…' : 'Continua con Google'}</Text></Pressable>
       {pending && <ActivityIndicator color={theme.green} style={styles.spinner} />}
     </View>
+    </ScrollView>
   </KeyboardAvoidingView></SafeAreaView>;
 }
 
 function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: theme.background },
-    container: { flex: 1, justifyContent: 'center', padding: 22 },
+    container: { flex: 1 },
+    scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingTop: 24 },
     card: { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: 28, padding: 22 },
     mark: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
     title: { color: theme.text, fontSize: 28, fontWeight: '800' },

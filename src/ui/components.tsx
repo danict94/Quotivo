@@ -27,7 +27,7 @@ export function Button({ children, variant = 'primary', style, ...props }: Omit<
 
 export function Input({ label, compact = false, style, ...props }: ComponentProps<typeof TextInput> & { label: string; compact?: boolean }) {
   const {theme}=useTheme(); const styles=createStyles(theme);
-  return <View style={compact ? styles.compactField : styles.field}><Text style={styles.label}>{label}</Text><TextInput {...props} style={[compact ? styles.compactInput : styles.input, !props.editable && styles.inputLocked, style]} placeholderTextColor={theme.muted} /></View>;
+  return <View style={compact ? styles.compactField : styles.field}><Text style={styles.label}>{label}</Text><TextInput {...props} style={[compact ? styles.compactInput : styles.input, props.editable === false && styles.inputLocked, style]} placeholderTextColor={theme.muted} /></View>;
 }
 
 /** @public Primitiva UI condivisa per superfici con bordo e padding. */

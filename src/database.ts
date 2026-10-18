@@ -10,6 +10,7 @@ import { accountDatabaseName, createAccountDatabaseScope, legacyDatabaseName } f
 import { LegacyDataClaimAvailability, resolveLegacyDataClaimAvailability } from './features/local-data/legacyClaimPolicy';
 import { readLegacyDataSnapshot, transferLegacyData, verifyLegacyDataTransfer, verifyLegacyTargetIntegrity } from './features/local-data/legacyClaimTransfer';
 import { CreateRevisionUseCase } from './features/revisions/CreateRevisionUseCase';
+import { resolveRevisionEditorAction } from './features/revisions/revisionEditorAction';
 import { deriveRecentWorkItems, RecentWorkItem } from './features/recent-work-items/recentWorkItems';
 import { repairSingleLegacyIssuedDraft } from './features/local-data/repairLegacyIssuedDraft';
 import { reconcileVerifiedLegacyIssuedQuote } from './features/quote-issuance/reconcileIssuedQuoteBootstrap';
@@ -272,14 +273,19 @@ export async function createRevisionDraftFromIssuedQuote(quoteId: string) {
   }, { quoteId: () => newId('quote'), itemId: () => newId('item') });
   return useCase.execute(quoteId);
 }
-export async function canCreateRevisionFromIssuedQuote(quoteId:string) {
+export async function getRevisionEditorAction(quoteId:string) {
   const db=await getActiveDatabase();
-  const source=await db.getFirstAsync<{status:string;revision_root_quote_id:string|null;revision_number:number}>('SELECT status, revision_root_quote_id, revision_number FROM quotes WHERE id=?',quoteId);
-  if(!source||source.status!=='issued') return false;
+  const source=await db.getFirstAsync<{id:string;status:'draft'|'issued';revision_root_quote_id:string|null;parent_quote_id:string|null;revision_number:number}>('SELECT id, status, revision_root_quote_id, parent_quote_id, revision_number FROM quotes WHERE id=?',quoteId);
+  if(!source) return {kind:'NONE'} as const;
   const rootId=source.revision_number===0?quoteId:source.revision_root_quote_id;
-  if(!rootId) return false;
+  if(!rootId) return {kind:'NONE'} as const;
   const row=await db.getFirstAsync<{revision_number:number|null}>('SELECT MAX(revision_number) AS revision_number FROM quotes WHERE revision_root_quote_id=?',rootId);
-  return (row?.revision_number??0)===source.revision_number;
+  const nextDraft=await db.getFirstAsync<{id:string;status:'draft'|'issued';revision_root_quote_id:string|null;parent_quote_id:string|null;revision_number:number}>('SELECT id, status, revision_root_quote_id, parent_quote_id, revision_number FROM quotes WHERE revision_root_quote_id=? AND parent_quote_id=? AND status=\'draft\' LIMIT 1',rootId,quoteId);
+  return resolveRevisionEditorAction(
+    source ? {id:source.id,status:source.status,revisionRootQuoteId:source.revision_root_quote_id,parentQuoteId:source.parent_quote_id,revisionNumber:source.revision_number} : null,
+    row?.revision_number??null,
+    nextDraft ? {id:nextDraft.id,status:nextDraft.status,revisionRootQuoteId:nextDraft.revision_root_quote_id,parentQuoteId:nextDraft.parent_quote_id,revisionNumber:nextDraft.revision_number} : null,
+  );
 }
 export type QuoteShareLinkCache={quoteId:string;issuanceId:string|null;shareId:string|null;lifecycle:string|null;commercialOutcome:string|null;commercialOutcomeSource?:string|null;commercialOutcomeDecidedAt?:string|null;openedAt:string|null;shareSyncedAt:string|null};
 export async function saveQuoteShareLinkCache(value:QuoteShareLinkCache){const db=await getActiveDatabase();await db.runAsync('INSERT INTO quote_share_links(quote_id,issuance_id,share_id,share_lifecycle_cache,commercial_outcome_cache,commercial_outcome_source_cache,commercial_outcome_decided_at_cache,opened_at_cache,share_synced_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(quote_id) DO UPDATE SET issuance_id=excluded.issuance_id,share_id=excluded.share_id,share_lifecycle_cache=excluded.share_lifecycle_cache,commercial_outcome_cache=excluded.commercial_outcome_cache,commercial_outcome_source_cache=coalesce(excluded.commercial_outcome_source_cache,quote_share_links.commercial_outcome_source_cache),commercial_outcome_decided_at_cache=coalesce(excluded.commercial_outcome_decided_at_cache,quote_share_links.commercial_outcome_decided_at_cache),opened_at_cache=excluded.opened_at_cache,share_synced_at=excluded.share_synced_at',value.quoteId,value.issuanceId,value.shareId,value.lifecycle,value.commercialOutcome,value.commercialOutcomeSource??null,value.commercialOutcomeDecidedAt??null,value.openedAt,value.shareSyncedAt);}
