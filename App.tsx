@@ -3,7 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CatalogItem, Client, closeAccountDatabase, createDraft, createMeasurementUnit, createVatRate, deleteDraft, finalizeDraft, findCatalogItemByTitle, getLegacyRepairDiagnostic, initializeDatabase, listCatalogItems, listClients, listMeasurementUnits, listQuotes, listRecentWorkItems, listVatRates, loadBusinessProfile, loadDocumentExport, loadDraftBusinessSnapshot, loadIssuedSnapshot, loadQuoteShareLinkCache, MeasurementUnit, saveCatalogItem, saveClient, saveDraft, saveQuoteShareLinkCache, updateBusinessProfile, VatRate } from './src/database';
+import { CatalogItem, Client, closeAccountDatabase, createDraft, createMeasurementUnit, createVatRate, deleteDraft, finalizeDraft, findCatalogItemByTitle, initializeDatabase, listCatalogItems, listClients, listMeasurementUnits, listQuotes, listRecentWorkItems, listVatRates, loadBusinessProfile, loadDocumentExport, loadDraftBusinessSnapshot, loadIssuedSnapshot, loadQuoteShareLinkCache, MeasurementUnit, saveCatalogItem, saveClient, saveDraft, saveQuoteShareLinkCache, updateBusinessProfile, VatRate } from './src/database';
 import { BusinessProfile, choosePersistentLogo, deleteManagedLogo } from './src/businessProfile';
 import { formatQuoteNumber } from './src/emissionClock';
 import { calculateEconomics, createEmptyQuoteItem, formatMoney, globalDiscountInputKey, hasMeaningfulDraftContent, itemTotalCents, materializeNumericInputs, newId, numericInputKey, NumericInputDrafts, parseMoneyCents, parsePercentBasisPoints, Quote, quoteTotalCents, tryParseDecimal } from './src/domain';
@@ -61,7 +61,7 @@ function QuotivoApp() {
   if (status === 'restoring') return <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}><ActivityIndicator color={theme.green} /></SafeAreaView>;
   if (status === 'unauthenticated') return <AuthScreen />;
   if (bootstrap.status === 'bootstrapping') return <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}><ActivityIndicator color={theme.green} /></SafeAreaView>;
-  return <View style={{ flex: 1 }}><LocalQuotivoApp key={session.user.id} ownerUserId={session.user.id} /><LegacyRepairDiagnosticBlock /></View>;
+  return <View style={{ flex: 1 }}><LocalQuotivoApp key={session.user.id} ownerUserId={session.user.id} /></View>;
 }
 function LocalQuotivoApp({ ownerUserId }: { ownerUserId: string }) {
   const {theme,preference,ready,setPreference}=useTheme(); styles=createStyles(theme);
@@ -164,8 +164,6 @@ function LocalQuotivoApp({ ownerUserId }: { ownerUserId: string }) {
     ]);
   }
 }
-
-function LegacyRepairDiagnosticBlock(){const diagnostic=getLegacyRepairDiagnostic();if(!diagnostic)return null;return <View style={{position:'absolute',left:12,right:12,bottom:12,padding:12,borderRadius:12,backgroundColor:'#ffffff',borderWidth:1,borderColor:'#bd9a47',zIndex:100}}><Text style={{fontSize:12,fontWeight:'800',color:'#5e4a18',marginBottom:4}}>DIAGNOSTICA INTERNA REPAIR</Text><Text selectable style={{fontSize:10,lineHeight:14,color:'#273329'}}>{JSON.stringify(diagnostic)}</Text></View>}
 
 function SettingsScreen2({onOpenBusinessProfile,onOpenNumbering}:{onOpenBusinessProfile:()=>void;onOpenNumbering:()=>void}) {
   const {preference,setPreference}=useTheme(); const {session,signOut}=useAuth(); const {effectivePlan,entitlement}=useBackendBootstrap(); const [loggingOut,setLoggingOut]=useState(false); const provider=session?.user.provider==='google'?'Google':session?.user.provider==='email'?'Email':'Account'; const isPro=effectivePlan==='PRO'; const expiry=entitlement?.validUntil?`Fino al ${new Date(entitlement.validUntil).toLocaleDateString('it-IT')}`:'Senza scadenza';
