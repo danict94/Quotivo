@@ -19,8 +19,5 @@
   "ignoreDependencies": [
     "expo-updates",
     "expo-system-ui"
-  ],
-  "ignoreBinaries": [
-    "gradlew.bat"
   ]
 }
