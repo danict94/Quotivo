@@ -1,27 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../auth/AuthProvider';
 import { useBackendBootstrap } from '../bootstrap/BackendBootstrapProvider';
-import { Button, Card } from '../../ui/components';
+import { Button, Card, UsageSummary } from '../../ui/components';
 import { useTheme } from '../../ui/theme';
 import { logoutUserMessage } from '../auth/boundedLogout';
 import { accountLifecycleUserMessage } from './AccountLifecycle';
 import { useAccountLifecycle } from './AccountLifecycleProvider';
+import { MonthlyFreeQuotaRepository } from '../quote-issuance/MonthlyFreeQuotaRepository';
+import { freeQuotaPresentation, type MonthlyFreeQuota } from '../quote-issuance/monthlyFreeQuota';
+
+const monthlyFreeQuotaRepository = new MonthlyFreeQuotaRepository();
 
 export function AccountSettingsScreen({ onOpenBusinessProfile, onOpenNumbering }: { onOpenBusinessProfile(): void; onOpenNumbering(): void }) {
   const { theme, preference, setPreference } = useTheme(); const styles = createStyles(theme);
   const { session, signOut } = useAuth(); const { effectivePlan, entitlement } = useBackendBootstrap(); const { lifecycle, source, loading, deactivate, reactivate } = useAccountLifecycle();
   const [saving, setSaving] = useState(false); const [loggingOut, setLoggingOut] = useState(false); const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [quota,setQuota]=useState<MonthlyFreeQuota|null>(null); const [quotaError,setQuotaError]=useState<string|null>(null); const [quotaLoading,setQuotaLoading]=useState(false);
   const inactive = lifecycle?.status === 'DEACTIVATED'; const isPro = effectivePlan === 'PRO';
+  const quotaPresentation = quota ? freeQuotaPresentation(quota) : null;
+  const showFreeQuota = quota ? quota.monthlyLimit !== null : !isPro;
   const expiry = entitlement?.validUntil ? `Fino al ${new Date(entitlement.validUntil).toLocaleDateString('it-IT')}` : 'Senza scadenza';
   const provider = session?.user.provider === 'google' ? 'Google' : session?.user.provider === 'email' ? 'Email' : 'Account';
   const status = loading ? 'Verifica stato…' : inactive ? 'Disattivato' : lifecycle?.status === 'ACTIVE' ? 'Attivo' : 'Stato non disponibile';
+  useEffect(()=>{let cancelled=false;setQuotaLoading(true);setQuotaError(null);monthlyFreeQuotaRepository.getForCurrentUser().then((value)=>{if(!cancelled)setQuota(value);}).catch((error)=>{if(!cancelled)setQuotaError(error instanceof Error?error.message:'Quota Free non disponibile.');}).finally(()=>{if(!cancelled)setQuotaLoading(false);});return()=>{cancelled=true;};},[]);
   async function perform(action: () => Promise<void>) { try { setSaving(true); await action(); } catch (error) { Alert.alert('Stato account non modificato', accountLifecycleUserMessage(error)); } finally { setSaving(false); } }
   async function logout() { if(loggingOut)return; try { setLogoutError(null);setLoggingOut(true);await signOut(); } catch(error) { setLogoutError(logoutUserMessage(error)); } finally { setLoggingOut(false); } }
   const confirmDeactivation = () => Alert.alert('Disattivare account?', 'Disattivando l account conserverai preventivi, PDF, catalogo e storico. Non potrai emettere, modificare dati server o usare/condividere link pubblici finché non riattivi l account.', [{ text: 'Annulla', style: 'cancel' }, { text: 'Disattiva account', style: 'destructive', onPress: () => { void perform(deactivate); } }]);
   return <View><View style={styles.header}><Text style={styles.title}>Impostazioni</Text><Text style={styles.subtitle}>Account, attività e preferenze.</Text></View>
-    <Text style={styles.section}>ACCOUNT</Text><Card><Text style={styles.cardTitle}>Account Quotivo</Text><Text style={styles.email}>{session?.user.email || 'Account Quotivo'}</Text><Row label="Piano" value={`${isPro ? 'Quotivo Pro' : 'Quotivo Free'}${isPro ? ` · ${expiry}` : ''}`}/><Row label="Accesso" value={provider}/></Card>
+    <Text style={styles.section}>ACCOUNT</Text><Card><Text style={styles.cardTitle}>Account Quotivo</Text><Text style={styles.email}>{session?.user.email || 'Account Quotivo'}</Text><Row label="Piano" value={`${isPro ? 'Quotivo Pro' : 'Quotivo Free'}${isPro ? ` · ${expiry}` : ''}`}/>{showFreeQuota&&<UsageSummary title="Preventivi questo mese" loading={quotaLoading} error={quotaError} primary={quotaPresentation?.used} secondary={quotaPresentation?.remaining}/>}<Row label="Accesso" value={provider}/></Card>
     <Card style={styles.lifecycle}><Row label="Stato account" value={status} danger={inactive}/>{source === 'cache' && <Text style={styles.note}>Ultimo stato locale: conferma richiesta online.</Text>}{inactive ? <Button disabled={saving || loading} onPress={() => { void perform(reactivate); }}>Riattiva account</Button> : <Button variant="danger" disabled={saving || loading || !lifecycle} onPress={confirmDeactivation}>Disattiva account</Button>}</Card>
     <Pressable style={styles.item} onPress={onOpenBusinessProfile}><Text style={styles.cardTitle}>Profilo aziendale</Text><Text style={styles.note}>Logo, dati impresa e valori predefiniti.</Text></Pressable><Pressable style={styles.item} onPress={onOpenNumbering}><Text style={styles.cardTitle}>Numerazione preventivi</Text><Text style={styles.note}>Scegli da quale numero continuare.</Text></Pressable>
     <Text style={styles.section}>ASPETTO</Text><Card><Text style={styles.cardTitle}>Tema</Text><View style={styles.choices}><Button variant="secondary" onPress={() => void setPreference('light')}>Chiaro{preference === 'light' ? ' ✓' : ''}</Button><Button variant="secondary" onPress={() => void setPreference('dark')}>Scuro{preference === 'dark' ? ' ✓' : ''}</Button><Button variant="secondary" onPress={() => void setPreference('system')}>Sistema{preference === 'system' ? ' ✓' : ''}</Button></View></Card>

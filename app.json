@@ -1,6 +1,6 @@
 ﻿{
     "expo":  {
-                 "version":  "0.1.12",
+                 "version":  "0.1.15",
                  "orientation":  "portrait",
                  "userInterfaceStyle":  "automatic",
                  "icon":  "./asset/icon.png",
@@ -11,7 +11,7 @@
                              "supportsTablet":  true
                          },
                  "android":  {
-                                 "versionCode":  13,
+                                 "versionCode":  16,
                                  "adaptiveIcon":  {
                                                       "foregroundImage":  "./asset/adaptive-icon.png",
                                                       "backgroundColor":  "#FFFFFF",
