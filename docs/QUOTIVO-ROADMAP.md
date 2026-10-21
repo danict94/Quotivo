@@ -9,8 +9,8 @@
 
 ## CURRENT / NEXT / AFTER
 
-- **CURRENT — QF-006/QF-008 Accesso rapido Home → Archivio** — `PARTIAL`: card Home tappabili e filtro Emessi canonico implementati; resta la verifica runtime mobile.
-- **NEXT — QF-011 Revisioni** — `PARTIAL`: UI completa, deploy ed E2E della catena da verificare.
+- **CURRENT — QF-011 Revisioni** — `PARTIAL`: implementazione locale completa (capability validata, emissione, storico/PDF, supersessione share); resta l'E2E reale della catena.
+- **NEXT — QF-006/QF-008 Accesso rapido Home → Archivio** — `PARTIAL`: implementati anche quota FREE Home e latest-only; resta la verifica runtime mobile dell'esperienza completa.
 - **AFTER — QF-012 Recenti** — `PARTIAL`: derivazione e UI presenti; resta la prova visiva Android.
 
 ## Gate per lo stato DONE
@@ -29,22 +29,22 @@
 | 3 | QF-003 | PARTIAL | PDF/DOCX e condivisione locale sono presenti. | Apertura/condivisione reale su dispositivo e app riceventi. |
 | 4 | QF-004 | PARTIAL | Share lifecycle, esito pubblico e function pubbliche esistono nel repository. | Deploy verificato ed E2E link pubblico. |
 | 5 | QF-005 | DONE | Badge commerciali uniformi verificati manualmente su Bozza, In attesa e Accettato; stato share separato. | Tutti i gate previsti superati. |
-| 6 | QF-006 | PARTIAL | Panoramica Home con importi e conteggi; card interamente tappabili verso Archivio con filtro coerente. | Verifica runtime mobile dell'accesso rapido. |
+| 6 | QF-006 | PARTIAL | Panoramica Home con metriche canoniche, card verso Archivio e quota FREE compatta server-authoritative; Home mostra solo la revisione corrente di ogni chain. | Verifica runtime mobile dell'accesso rapido e della quota. |
 | 7 | QF-007 | DONE | Card archivio con Bozza/numero, intervento, cliente, importo e badge commerciale verificata runtime su mobile. | Tutti i gate previsti superati. |
-| 8 | QF-008 | PARTIAL | Ricerca combinabile con filtri commerciali, incluso Emessi (= issued, bozze escluse). | Verifica runtime mobile del nuovo filtro e della combinazione. |
-| 9 | QF-009 | DONE | Dettaglio emesso con documento, stato commerciale separato dal lifecycle share e azioni coerenti, verificato manualmente runtime/UX. | Tutti i gate previsti superati. |
+| 8 | QF-008 | PARTIAL | Ricerca combinabile con filtri commerciali, incluso Emessi (= issued, bozze escluse), applicati dopo `currentQuoteProjection`. | Verifica runtime mobile del filtro e della combinazione. |
+| 9 | QF-009 | DONE | Dettaglio emesso con stato commerciale separato dal lifecycle share e azioni coerenti, verificato manualmente runtime/UX; la struttura a tab Riepilogo/Documento/Attività è presente nel codice e coperta da test. | Tutti i gate previsti superati; il controllo visivo della nuova gerarchia resta parte della verifica corrente QF-011/QF-006. |
 | 10 | QF-010 | DONE | Authority canonica, backfill legacy, UI/cache, deploy ed E2E manuale/public-link, conflitto e revisioni verificati; runtime utente PASS. | Tutti i gate previsti superati. |
-| 11 | QF-011 | PARTIAL | Modello, use case, emissione revisioni e test sono presenti. | UI completa, deploy ed E2E revisione. |
+| 11 | QF-011 | PARTIAL | Modello e emissione revisioni, `RevisionChainCapability` SQLite validata, azioni CREATE/RESUME, storico read-only con PDF, latest-only e recovery idempotente della supersessione share sono implementati e testati. | E2E reale Rev.0→Rev.n: quota invariata, outcome non trasferito, PDF/storico, share precedente SUPERSEDED e proiezioni Home/Archivio. |
 | 12 | QF-012 | PARTIAL | Derivazione e UI Recenti con test sono presenti. | Prova visiva Android. |
 | 13 | QF-013 | PARTIAL | Rubrica e collegamento al preventivo sono presenti. | E2E dispositivo. |
 | 14 | QF-014 | PARTIAL | Catalogo locale e riuso sono presenti. | E2E dispositivo. |
 | 15 | QF-015 | PARTIAL | Profilo, logo e documenti sono presenti. | Verifica device/PDF reale. |
 | 16 | QF-016 | TODO | Template riutilizzabili completi non verificati. | Implementazione e test. |
 | 17 | QF-017 | PARTIAL | Auth provider/repository e schermata accesso sono presenti. | E2E reale dei provider. |
-| 18 | QF-018 | PARTIAL | Lifecycle ACTIVE/DEACTIVATED, UI e test sono presenti. | Deploy ed E2E disattiva/riattiva. |
+| 18 | QF-018 | PARTIAL | Lifecycle ACTIVE/DEACTIVATED, repository/guard server-side, UI e logout bounded sono presenti con test. | Deploy ed E2E disattiva/riattiva e retry offline. |
 | 19 | QF-019 | TODO | Eliminazione definitiva account non verificata. | Prodotto, sicurezza, deploy ed E2E. |
 | 20 | QF-020 | TODO | Export dati account non verificato. | Implementazione e test. |
-| 21 | QF-021 | PARTIAL | Bootstrap ed entitlement repository/migrazioni sono presenti. | Deploy ed E2E FREE/PRO. |
+| 21 | QF-021 | PARTIAL | Bootstrap ed entitlement repository/migrazioni sono presenti; quota FREE legge `usedThisMonth`, limite e residuo dalla stessa authority server-side dell'emissione. | E2E FREE/PRO su account reale, inclusa Rev.0 che consuma quota e Rev.n che non la consuma. |
 | 22 | QF-022 | PARTIAL | Fondazioni grant sono presenti; flusso prodotto non verificato. | UI/amministrazione, deploy ed E2E. |
 | 23 | QF-023 | TODO | CRM amministrativo non verificato. | Implementazione e controlli accesso. |
 | 24 | QF-024 | TODO | Pagina Piano non verificata. | Implementazione e UX/E2E. |
@@ -75,7 +75,7 @@
 | 49 | QF-049 | TODO | Onboarding prodotto/analytics non verificati. | Decisioni privacy, UX e misurazione. |
 | 50 | QF-050 | DEFERRED | Referral/creator dipende dal prodotto pronto al lancio. | Piano campagna e analytics. |
 
-## Riepilogo iniziale dell'audit
+## Riepilogo dello stato documentato
 
 - `DONE`: 4
 - `PARTIAL`: 15
@@ -84,4 +84,4 @@
 - `BLOCKED`: 0
 - `DEFERRED`: 2
 
-Questo riepilogo non attribuisce `DONE` a codice, test o migrazioni non accompagnati dai gate reali richiesti.
+Questo riepilogo non attribuisce `DONE` a codice, test o migrazioni non accompagnati dai gate reali richiesti. `docs/ROADMAP.md` è superseded e non va usato per aggiornare stati o priorità.

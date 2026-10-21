@@ -5,7 +5,7 @@ Destinazione: quotivo-mobile/docs/QUOTIVO-CICLO-COMPLETO.md
 
 ## 1. Mandato e precedenza
 
-Questo documento consolida le decisioni dell'utente e sostituisce le precedenti indicazioni in conflitto: un solo modello adattivo, numerazione annuale, funzioni prima del redesign, SQLite senza cloud. Leggere anche AGENTS.md, audit, architettura e roadmap locali. Le istruzioni successive dell'utente prevalgono.
+Questo documento consolida le decisioni del ciclo preventivo: un solo modello adattivo, numerazione annuale, funzioni prima del redesign e persistenza locale-first. SQLite resta il workspace locale; Supabase è già authority per identità, emissione, quota, entitlement, lifecycle, share ed esito commerciale. Leggere anche `AGENTS.md`, `ARCHITECTURE.md`, SSOT e roadmap QF correnti. Le istruzioni successive dell'utente prevalgono.
 
 Implementare incrementi funzionanti, non soltanto documentazione o UI. Verificare prima il codice locale e preservare le modifiche esistenti. Nessun commit, push, invio a clienti o pubblicazione autorizzato da questo documento.
 
@@ -21,7 +21,7 @@ L'utente configura la propria attività, compila un preventivo, vede il document
 
 Ora: modello completo unico; profilo e logo; compilazione; calcoli; anteprima PDF reale; emissione; esportazioni; archivio; backup. La rubrica dedicata segue il primo flusso documento, ma i contatti cliente devono essere previsti da subito.
 
-Dopo: varianti grafiche, redesign senza terracotta, adattamenti per professione, registrazione, sincronizzazione e invio automatico. Nessun Neon, server, account obbligatorio o integrazione pubblicitaria in questa fase. Il modello resta utile senza Esigenta.
+Dopo: varianti grafiche, adattamenti per professione, sincronizzazione completa multi-dispositivo e invio automatico. Account e authority remota già esistono ma non sostituiscono l'uso locale-first né autorizzano invii automatici. Il modello resta utile senza Esigenta.
 
 ## 4. UX: tre passaggi, non un modulo infinito
 
@@ -199,6 +199,12 @@ Non inferire mai lo stato `issued` da PDF o snapshot locali. Un'emissione è pro
 `account_lifecycle` is the only server-side account availability source: existing and new accounts start `ACTIVE`; `DEACTIVATED` preserves history, PDFs and tokens but blocks every writer, upload and public link through `assert_account_active`. The state transition is idempotent, server-side and never deletes data.
 
 The app caches lifecycle only to describe the account in Settings. Deactivate/reactivate always call the server use cases; offline never changes local lifecycle authority or removes local SQLite data.
+
+## Revisioni, proiezioni e quota
+
+Una catena revisionale mantiene numero base/anno, snapshot e PDF immutabili per ogni Rev.n. Solo l'ultima revisione emessa è corrente nelle superfici operative; le precedenti restano nello storico Documento, in sola lettura. La capability revisionale distingue esplicitamente CREATE, RESUME, storico ed errori di lineage. Una Rev.n non consuma una nuova quota FREE, non eredita l'esito commerciale e supersede la share parent con recovery idempotente.
+
+La quota visibile agli utenti FREE deriva esclusivamente dalla funzione server-authoritative condivisa con l'autorizzazione di emissione: conteggia Rev.0 del mese server, non le revisioni; per PRO limite e residuo sono null. Home e Archivio usano proiezioni canoniche (`currentQuoteProjection`, `commercialMetrics`) e non contano revisioni supersedute.
 
 ## 18. Consegna di ogni incremento
 

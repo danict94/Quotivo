@@ -1,4 +1,10 @@
-# Quotivo — Roadmap operativa
+# Quotivo — Roadmap storica (SUPERSEDED)
+
+> **Stato: SUPERSEDED, non operativa.** Questo registro conserva gli scope precedenti come evidenza storica. Non aggiornare qui stati, priorità o gate.
+>
+> Riferimenti correnti: [`QUOTIVO-SSOT-PRODOTTO-ROADMAP.md`](QUOTIVO-SSOT-PRODOTTO-ROADMAP.md) per decisioni e QF-ID; [`QUOTIVO-ROADMAP.md`](QUOTIVO-ROADMAP.md) per stato operativo, CURRENT/NEXT/AFTER e gate.
+
+---
 
 ## Regola di avanzamento
 

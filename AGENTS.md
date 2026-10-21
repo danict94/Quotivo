@@ -7,7 +7,8 @@ Questa è la copia canonica delle istruzioni, collocata nella radice Git. La pre
 Leggere:
 - docs/quotivo-brief.md
 - docs/ARCHITECTURE.md
-- docs/ROADMAP.md
+- docs/QUOTIVO-SSOT-PRODOTTO-ROADMAP.md
+- docs/QUOTIVO-ROADMAP.md
 - docs/HANDOFF.md
 
 Verificare percorso corrente, radice Git e stato dei file.
@@ -91,7 +92,7 @@ Quote lifecycle invariants are mandatory: never infer `ISSUED` from local artifa
 
 ## Chiusura di ogni scope
 
-Aggiornare ROADMAP.md con stato reale, verifiche e problemi aperti.
+Aggiornare QUOTIVO-ROADMAP.md con stato reale, verifiche e problemi aperti.
 Aggiornare ARCHITECTURE.md quando cambia una decisione.
 Aggiornare HANDOFF.md con le informazioni necessarie alla prossima sessione.
 

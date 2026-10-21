@@ -18,6 +18,9 @@ Principio: **potente dietro, semplice davanti**. Le informazioni già note vengo
 
 - Un documento emesso, il suo numero e il suo snapshot restano immutabili; una modifica sostanziale crea una revisione.
 - Stati commerciali visibili: Bozza, In attesa, Accettato, Rifiutato. Apertura del link, invio, upload e sincronizzazione sono stati tecnici separati.
+- L'esito commerciale definitivo appartiene all'emissione, non al singolo link: la prima decisione Accettato/Rifiutato vince; il link può restare consultabile.
+- Nelle superfici operative ogni catena di revisioni mostra una sola revisione corrente; le revisioni precedenti restano accessibili come storico immutabile con i rispettivi documenti.
+- Il piano e la quota FREE sono comunicati con valori authoritativi del server; una revisione non consuma una nuova emissione FREE.
 - Un preventivo accettato può alimentare un lavoro senza reinserimento manuale.
 - Nessun successo viene mostrato prima dell'esito reale dell'operazione.
 - L'AI propone e organizza; non emette né modifica definitivamente senza conferma umana.
@@ -39,7 +42,7 @@ Principio: **potente dietro, semplice davanti**. Le informazioni già note vengo
 - **QF-008 — Filtri e ricerca archivio:** accesso rapido a bozze, emessi, in attesa, accettati e rifiutati, combinabile con la ricerca.
 - **QF-009 — Dettaglio preventivo:** centro di controllo per documento, stato, share, PDF e azioni consentite.
 - **QF-010 — Esito manuale:** registrazione di accettato/rifiutato con data e fonte, distinta dal link.
-- **QF-011 — Revisioni:** catena Rev.0/Rev.n, storico immutabile e una revisione commercialmente corrente.
+- **QF-011 — Revisioni:** catena Rev.0/Rev.n, una sola revisione corrente nelle superfici operative e storico immutabile con PDF per revisione.
 - **QF-012 — Lavorazioni recenti:** riuso delle lavorazioni emesse correnti, separato dal catalogo.
 
 ### Anagrafica e configurazione operativa
@@ -55,7 +58,7 @@ Principio: **potente dietro, semplice davanti**. Le informazioni già note vengo
 - **QF-018 — Lifecycle account:** account ACTIVE/DEACTIVATED, riattivabile e con dati preservati.
 - **QF-019 — Eliminazione account:** flusso definitivo con spiegazione, riautenticazione, conferma esplicita e wipe finale solo dopo esito reale.
 - **QF-020 — Esportazione dati account:** copia portabile dei dati prima dell'eliminazione.
-- **QF-021 — Entitlement FREE/PRO:** livello effettivo finale, deciso da authority server-side e separato dalla sua origine.
+- **QF-021 — Entitlement FREE/PRO:** livello effettivo finale e quota FREE, decisi da authority server-side e separati dalla loro origine.
 - **QF-022 — Grant PRO:** assegnazioni con origine, validità, revoca e scadenza senza perdita dati al downgrade.
 - **QF-023 — Gestione amministrativa piani:** ricerca utente e gestione dei grant senza modifiche manuali ai dati.
 - **QF-024 — Pagina Piano:** stato e origine del piano comprensibili in Impostazioni.

@@ -2,8 +2,8 @@
 
 ## Fonte di verità
 
-Leggere questo documento insieme a quotivo-brief.md e ROADMAP.md.
-Le decisioni successive qui specificate precisano il brief originale.
+Leggere questo documento insieme a `QUOTIVO-SSOT-PRODOTTO-ROADMAP.md`, `QUOTIVO-ROADMAP.md` e `QUOTIVO-BACKEND-MODELLO-COMMERCIALE.md` prima di modificare contratti remoti.
+`ROADMAP.md` è storico e superseded. Le decisioni successive qui specificate precisano il brief originale.
 Verificare sempre il codice prima di dichiarare una funzione implementata.
 
 ## Stack verificato al passaggio di consegne
@@ -19,38 +19,37 @@ Installare i moduli Expo usando il meccanismo di compatibilità di Expo.
 
 ## Struttura attuale
 
-quotivo/
-  AGENTS.md
+quotivo-mobile/
+  App.tsx
+  src/
+    domain.ts                 # regole e proiezioni pure condivisibili
+    database.ts, migrations.ts # adapter SQLite locale
+    features/                 # use case, repository contract e UI per dominio
+    ui/                       # theme, token e primitive Design System
+  supabase/
+    migrations/               # authority remota e contratti SQL versionati
+    functions/                # confini owner/public per quote sharing
   docs/
-    quotivo-brief.md
-    ARCHITECTURE.md
-    ROADMAP.md
-    HANDOFF.md
-  quotivo-mobile/
-    App.tsx
-    package.json
-    package-lock.json
-    app.json
-    tsconfig.json
-    SETUP.md
+    QUOTIVO-SSOT-PRODOTTO-ROADMAP.md
+    QUOTIVO-ROADMAP.md
 
 Verificare la struttura effettiva prima di modificarla.
 
 Il monorepo descritto nel brief è una direzione futura, non una struttura
 già implementata. Non spostare subito tutto in apps e packages.
 
-Prima separare dentro quotivo-mobile/src:
+La separazione corrente dentro `src` è:
 - domain: modelli, validazione, calcoli;
 - database: apertura SQLite, migrazioni e repository;
 - features: preventivi, clienti, catalogo, template, impostazioni;
-- components: componenti riutilizzabili;
+- ui: componenti e primitive riutilizzabili;
 - documents: modelli ed esportatori;
 - theme: colori, spaziature e tipografia.
 
 La logica di dominio non deve dipendere dai componenti React Native.
 Non presumere che tutti i componenti UI mobili siano riutilizzabili in Next.js.
 
-## Database iniziale
+## Persistenza locale-first e authority remota
 
 ### Incremento editor a tre step
 
@@ -58,14 +57,7 @@ La migrazione 7 aggiunge rubrica `clients`, collegamento opzionale della bozza a
 
 La migrazione 8 aggiunge ai soli preventivi la copia dei dati cliente mancanti: referente, telefono, email, codice fiscale e P. IVA. La rubrica resta una sorgente di riempimento, non di rendering retroattivo: il documento e lo snapshot emesso usano esclusivamente la copia della bozza. Gli snapshot schema 3 precedenti restano leggibili con campi cliente vuoti.
 
-Usare solo SQLite sul dispositivo, tramite expo-sqlite.
-
-Non introdurre in questa fase:
-- Neon;
-- backend;
-- registrazione utenti;
-- sincronizzazione cloud;
-- credenziali remote.
+SQLite tramite `expo-sqlite` resta la sorgente locale per bozze, clienti, catalogo, snapshot e documenti. Supabase è già l'authority remota per identità, entitlement, lifecycle account, autorizzazione/numerazione dell'emissione, quota FREE, share pubbliche ed esito commerciale. Non introdurre una seconda authority o una sincronizzazione generale delle bozze.
 
 I dati devono sopravvivere alla chiusura e al riavvio dell'app.
 
@@ -104,14 +96,7 @@ cliente, condizioni e configurazione fiscale utilizzati all'emissione.
 
 Una nuova bozza ha un identificativo interno, ma nessun numero definitivo.
 
-Alla finalizzazione:
-1. validare il documento;
-2. leggere e incrementare il contatore;
-3. assegnare il numero;
-4. salvare lo snapshot del documento;
-5. registrare l'evento nello storico.
-
-Eseguire queste operazioni in una singola transazione SQLite.
+Alla finalizzazione la bozza è validata localmente; l'autorizzazione server assegna in modo idempotente issuance e numero annuale. Solo dopo l'autorizzazione si persistono localmente emesso e snapshot; reconciliation esplicita recupera un'interruzione senza creare una seconda issuance o un nuovo numero.
 
 Imporre unicità al numero assegnato.
 Non usare MAX(numero) + 1 come unico meccanismo di numerazione.
@@ -121,7 +106,7 @@ La numerazione corrente è annuale: 1/2026, 2/2026 e 1/2027.
 La sequenza dell'anno viene creata alla prima emissione e non viene mai decrementata.
 Non riutilizzare i numeri annullati.
 
-Implementazione corrente: la migrazione 4 usa sequenze `quotes:ANNO`. Le emissioni leggono e incrementano esclusivamente la sequenza dell'anno locale nella stessa transazione esclusiva che salva dati, righe, numero, stato e snapshot. Gli emessi legacy conservano il numero originario con anno nullo: l'istante UTC precedentemente registrato non è sufficiente a ricostruire con certezza l'anno locale e non viene reinterpretato.
+La sequenza locale resta il supporto offline/storico. Per le nuove emissioni autorizzate il numero canonico è assegnato dalla RPC server-side; gli emessi legacy conservano il numero originario con anno nullo quando l'istante UTC non permette di ricostruire l'anno locale con certezza.
 
 `issued_quote_snapshots` contiene un payload JSON con versione schema ed è protetta da trigger contro aggiornamento e cancellazione. Lo snapshot versione 1 comprende soltanto i dati realmente disponibili nel modello corrente (cliente testuale, titolo e righe). I preventivi emessi prima della migrazione restano protetti nelle tabelle originali ma non ricevono snapshot retroattivi incompleti o dati inventati.
 
@@ -207,8 +192,7 @@ Gli export di un preventivo emesso derivano esclusivamente dal relativo snapshot
 
 ## Backup
 
-Solo SQLite significa che i dati sono locali.
-Perdita del dispositivo o disinstallazione possono comportare perdita dati.
+Le bozze e gli artefatti locali restano nel sandbox del dispositivo: perdita o disinstallazione possono ancora comportare perdita dei dati non esportati/non recuperati. Le authority remote non sostituiscono un backup e non sincronizzano automaticamente l'archivio locale.
 
 La versione utilizzabile deve includere backup e ripristino,
 non solo esportazioni dei singoli preventivi.
@@ -217,16 +201,9 @@ Il backup comprende database e risorse necessarie, come il logo.
 Il ripristino deve validare formato e versione prima di modificare dati.
 Non effettuare sovrascritture silenziose.
 
-## Futuro cloud
+## Confini remoti correnti
 
-Registrazione, autenticazione, database remoto e pannello amministratore
-sono una fase successiva.
-
-Neon/PostgreSQL è un'opzione, non una dipendenza attuale.
-La sincronizzazione richiederà API, autorizzazioni, gestione conflitti
-e una strategia di numerazione multi-dispositivo.
-
-UUID e timestamp aiutano, ma non rendono automatica la sincronizzazione.
+Supabase/PostgreSQL è già una dipendenza per le authority indicate sopra. `quote_issuances` identifica l'emissione autorizzata; `quote_commercial_outcomes` conserva un solo esito finale per issuance; `quote_shares` è il lifecycle del link e non l'authority commerciale. Le Edge Function `quote-share-owner` e `quote-public` sono i confini rispettivamente owner/JWT e pubblico/token. Una sincronizzazione completa SQLite↔cloud, backup multi-dispositivo e pannello amministrativo restano scope futuri.
 
 ## Esigenta
 
@@ -276,8 +253,22 @@ Recenti non è un catalogo né una nuova persistenza: `listRecentWorkItems` deri
 
 ## Fondazione revisioni preventivo
 
-La migrazione locale 14 aggiunge a `quotes` `revision_root_quote_id`, `parent_quote_id` e `revision_number`. Gli esistenti restano Rev.0 (`0`, riferimenti null); una revisione successiva deve indicare una root Rev.0 e il parent della revisione immediatamente precedente. Indici e trigger impediscono numeri negativi, autoriferimenti, radici/parent mancanti, catene non consecutive e doppie revisioni nello stesso root. Il database locale è già isolato per account: ogni riferimento `quotes` validato dal trigger appartiene quindi allo stesso owner locale. Non esiste ancora clonazione, UI, modifica della numerazione, snapshot o PDF per revisioni.
+La migrazione locale 14 aggiunge a `quotes` `revision_root_quote_id`, `parent_quote_id` e `revision_number`. Gli esistenti restano Rev.0 (`0`, riferimenti null); una revisione successiva indica root Rev.0 e parent immediato. Indici e trigger impediscono numeri negativi, autoriferimenti, radici/parent mancanti, catene non consecutive e doppie revisioni nello stesso root. `RevisionChainCapability`, tramite adapter SQLite, restituisce esplicitamente CREATE, RESUME, NONE_HISTORICAL o un errore di lineage: record mancanti/corrotti non diventano un silenzioso “nessuna azione”.
 
 `CreateRevisionUseCase` legge il solo snapshot immutabile dell'emesso e produce una nuova `Quote` draft con ID nuovi per documento e righe. Il repository locale serializza l'inserimento in transazione esclusiva e l'indice unico intercetta collisioni; la sorgente deve essere l'ultima revisione emessa della catena. Il catalogo e il profilo attività corrente non vengono letti. Il collegamento `parent_quote_id` conserva l'accesso a condizioni e dati storici nel relativo snapshot, senza duplicare il profilo nella bozza.
 
+L'emissione di Rev.n conserva numero base/anno, non consuma una nuova quota FREE e non trasferisce l'esito commerciale. `currentQuoteProjection` conserva tutte le bozze e una sola revisione emessa latest per chain; Home, Archivio, metriche commerciali e Recenti la riusano. Nel dettaglio la revisione corrente espone CREATE/RESUME, mentre lo storico è read-only e apre il PDF immutabile di ogni revisione precedente. Dopo l'emissione, la supersessione della share parent è retry-safe e separata dall'esito dell'emissione.
+
 `quote_share_snapshots` conserva il payload immutabile e versionato; `quote_shares` conserva solo l'hash del bearer token e stato. Il bearer recuperabile è cifrato nel vault separato `quote_share_token_secrets`, non leggibile dall'app. Le Edge Function `quote-share-owner` (JWT owner) e `quote-public` (token pubblico) sono gli unici confini per creare, recuperare, revocare, aprire e decidere sul link.
+
+## Proiezioni, Design System e composizione UI
+
+`commercialQuoteStatus` resta dominio puro; `CommercialStatusBadge` adatta stato a label/tone tramite `StatusBadge` e token centrali. `commercialMetrics` riceve la proiezione corrente e restituisce conteggi/importi senza calcoli commerciali nella Home. Il dettaglio emesso usa tab locali Riepilogo, Documento e Attività; i tab non introducono fetch o regole di business.
+
+`App.tsx` mantiene shell, navigazione e wiring delle dipendenze condivise. Home/panoramica, Archivio, Clienti e Catalogo sono feature separate. L'editor legacy nel root conserva ancora accessi agli adapter locali: è debito di composizione noto, non una seconda authority né una ragione per duplicare regole di dominio.
+
+## Quota FREE, entitlement e lifecycle
+
+La funzione server-side `quote_monthly_quota()` definisce owner autenticato, confine mensile, entitlement, limite FREE e conteggio delle sole issuance Rev.0. `get_quote_monthly_quota`, `authorize_quote_issue` e `authorize_quote_revision_issue` riusano la stessa semantica; per PRO limite e residuo sono null. La UI legge soltanto questa proiezione server-authoritative.
+
+`account_lifecycle` è l'authority server-side ACTIVE/DEACTIVATED. Ogni writer remoto passa da `assert_account_active`; disattivazione preserva SQLite, documenti e storico. Logout chiude sessione remota e database locale solo dopo successo, con timeout bounded e retry esplicito.
