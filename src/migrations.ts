@@ -418,6 +418,10 @@ export const migrations: Migration[] = [
     ALTER TABLE quote_share_links ADD COLUMN commercial_outcome_source_cache TEXT;
     ALTER TABLE quote_share_links ADD COLUMN commercial_outcome_decided_at_cache TEXT;
   ` },
+  { version: 17, sql: `
+    ALTER TABLE quote_share_links ADD COLUMN issuance_snapshot_sync_state TEXT
+      CHECK (issuance_snapshot_sync_state IN ('PENDING', 'SYNCED') OR issuance_snapshot_sync_state IS NULL);
+  ` },
 ];
 
 export interface MigrationDatabase {
