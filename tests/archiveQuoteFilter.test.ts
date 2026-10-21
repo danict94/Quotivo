@@ -42,12 +42,14 @@ test('interseca filtro e ricerca senza modificare l ordine di archivio', () => {
 test('esclude le revisioni emesse supersedute prima di applicare ricerca e filtro commerciale', () => {
   const rev0 = quote('root', 'issued', 45, 'Facciata storica', 'Tavola Valdese');
   const rev1 = { ...quote('rev-1', 'issued', 46, 'Facciata aggiornata', 'Tavola Valdese'), revisionRootQuoteId: rev0.id, parentQuoteId: rev0.id, revisionNumber: 1, issuedAt: '2026-01-02T00:00:00.000Z' };
+  const rev2 = { ...quote('rev-2', 'issued', 47, 'Facciata corrente', 'Tavola Valdese'), revisionRootQuoteId: rev0.id, parentQuoteId: rev1.id, revisionNumber: 2, issuedAt: '2026-01-03T00:00:00.000Z' };
   const draft = quote('draft-current', 'draft', null, 'Bozza separata', 'Mario Bianchi');
-  const outcomes = { root: 'PENDING', 'rev-1': 'ACCEPTED' } as const;
-  const projectedQuotes = [rev0, rev1, draft];
+  const outcomes = { root: 'PENDING', 'rev-1': 'ACCEPTED', 'rev-2': 'REJECTED' } as const;
+  const projectedQuotes = [rev0, rev1, rev2, draft];
 
   assert.deepEqual(filterArchiveQuotes({ quotes: projectedQuotes, outcomes, commercialFilter: 'PENDING', query: '' }), []);
-  assert.deepEqual(filterArchiveQuotes({ quotes: projectedQuotes, outcomes, commercialFilter: 'ACCEPTED', query: 'facciata' }).map((quote) => quote.id), ['rev-1']);
-  assert.deepEqual(filterArchiveQuotes({ quotes: projectedQuotes, outcomes, commercialFilter: 'ISSUED', query: 'aggiornata' }).map((quote) => quote.id), ['rev-1']);
+  assert.deepEqual(filterArchiveQuotes({ quotes: projectedQuotes, outcomes, commercialFilter: 'ACCEPTED', query: 'facciata' }), []);
+  assert.deepEqual(filterArchiveQuotes({ quotes: projectedQuotes, outcomes, commercialFilter: 'REJECTED', query: 'facciata' }).map((quote) => quote.id), ['rev-2']);
+  assert.deepEqual(filterArchiveQuotes({ quotes: projectedQuotes, outcomes, commercialFilter: 'ISSUED', query: 'corrente' }).map((quote) => quote.id), ['rev-2']);
   assert.deepEqual(filterArchiveQuotes({ quotes: projectedQuotes, outcomes, commercialFilter: 'DRAFT', query: '' }).map((quote) => quote.id), ['draft-current']);
 });

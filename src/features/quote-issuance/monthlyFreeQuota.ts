@@ -11,3 +11,8 @@ export function freeQuotaPresentation(quota: MonthlyFreeQuota) {
   if (quota.monthlyLimit === null || quota.remaining === null) return null;
   return { used: `${quota.usedThisMonth} di ${quota.monthlyLimit} utilizzati`, remaining: `${quota.remaining} disponibili` };
 }
+
+export function freeQuotaInlineLabel(quota: MonthlyFreeQuota) {
+  const presentation = freeQuotaPresentation(quota);
+  return presentation ? `Piano Free · ${presentation.used} · ${presentation.remaining}` : null;
+}

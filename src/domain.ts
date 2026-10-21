@@ -112,6 +112,12 @@ export function currentQuoteProjection(quotes: Quote[]): CurrentQuoteProjection 
   };
 }
 
+/** Read-only historical issued revisions preceding the supplied current revision. */
+export function revisionHistoryForQuote(quotes: Quote[], currentQuote: Quote): Quote[] {
+  const chain = issuedRevisionChains(quotes).get(revisionChainId(currentQuote)) ?? [];
+  return chain.filter((quote) => quote.id !== currentQuote.id && quote.revisionNumber < currentQuote.revisionNumber).sort((left, right) => right.revisionNumber - left.revisionNumber);
+}
+
 /** Restituisce una sola emissione economica per chain: l'ultima revisione emessa. */
 export function aggregateIssuedRevisionChains(quotes: Quote[]): RevisionAggregate {
   const byChain = issuedRevisionChains(quotes);

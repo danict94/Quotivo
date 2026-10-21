@@ -17,3 +17,11 @@ test('le tab sono collegate allo stato locale e alle tre superfici del dettaglio
   assert.match(source, /activeTab==='document'/);
   assert.match(source, /activeTab==='activity'/);
 });
+
+test('Documento mantiene la corrente separata e rende lo storico revisioni read-only', async () => {
+  const source = await readFile(path.join(process.cwd(), 'App.tsx'), 'utf8');
+  assert.match(source, /Storico revisioni \(\$\{revisionHistory\.length\}\)/);
+  assert.match(source, /<DetailListRow key=\{revision\.id\}/);
+  assert.match(source, /actionLabel="Apri PDF" onAction=\{\(\)=>void onPreviewRevision\(revision\)\}/);
+  assert.doesNotMatch(source, /onRevisionAction\(revision\)/);
+});

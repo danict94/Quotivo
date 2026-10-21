@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../auth/AuthProvider';
@@ -8,23 +8,20 @@ import { useTheme } from '../../ui/theme';
 import { logoutUserMessage } from '../auth/boundedLogout';
 import { accountLifecycleUserMessage } from './AccountLifecycle';
 import { useAccountLifecycle } from './AccountLifecycleProvider';
-import { MonthlyFreeQuotaRepository } from '../quote-issuance/MonthlyFreeQuotaRepository';
-import { freeQuotaPresentation, type MonthlyFreeQuota } from '../quote-issuance/monthlyFreeQuota';
-
-const monthlyFreeQuotaRepository = new MonthlyFreeQuotaRepository();
+import { freeQuotaPresentation } from '../quote-issuance/monthlyFreeQuota';
+import { useMonthlyFreeQuota } from '../quote-issuance/useMonthlyFreeQuota';
 
 export function AccountSettingsScreen({ onOpenBusinessProfile, onOpenNumbering }: { onOpenBusinessProfile(): void; onOpenNumbering(): void }) {
   const { theme, preference, setPreference } = useTheme(); const styles = createStyles(theme);
   const { session, signOut } = useAuth(); const { effectivePlan, entitlement } = useBackendBootstrap(); const { lifecycle, source, loading, deactivate, reactivate } = useAccountLifecycle();
   const [saving, setSaving] = useState(false); const [loggingOut, setLoggingOut] = useState(false); const [logoutError, setLogoutError] = useState<string | null>(null);
-  const [quota,setQuota]=useState<MonthlyFreeQuota|null>(null); const [quotaError,setQuotaError]=useState<string|null>(null); const [quotaLoading,setQuotaLoading]=useState(false);
+  const { quota, error: quotaError, loading: quotaLoading } = useMonthlyFreeQuota();
   const inactive = lifecycle?.status === 'DEACTIVATED'; const isPro = effectivePlan === 'PRO';
   const quotaPresentation = quota ? freeQuotaPresentation(quota) : null;
   const showFreeQuota = quota ? quota.monthlyLimit !== null : !isPro;
   const expiry = entitlement?.validUntil ? `Fino al ${new Date(entitlement.validUntil).toLocaleDateString('it-IT')}` : 'Senza scadenza';
   const provider = session?.user.provider === 'google' ? 'Google' : session?.user.provider === 'email' ? 'Email' : 'Account';
   const status = loading ? 'Verifica stato…' : inactive ? 'Disattivato' : lifecycle?.status === 'ACTIVE' ? 'Attivo' : 'Stato non disponibile';
-  useEffect(()=>{let cancelled=false;setQuotaLoading(true);setQuotaError(null);monthlyFreeQuotaRepository.getForCurrentUser().then((value)=>{if(!cancelled)setQuota(value);}).catch((error)=>{if(!cancelled)setQuotaError(error instanceof Error?error.message:'Quota Free non disponibile.');}).finally(()=>{if(!cancelled)setQuotaLoading(false);});return()=>{cancelled=true;};},[]);
   async function perform(action: () => Promise<void>) { try { setSaving(true); await action(); } catch (error) { Alert.alert('Stato account non modificato', accountLifecycleUserMessage(error)); } finally { setSaving(false); } }
   async function logout() { if(loggingOut)return; try { setLogoutError(null);setLoggingOut(true);await signOut(); } catch(error) { setLogoutError(logoutUserMessage(error)); } finally { setLoggingOut(false); } }
   const confirmDeactivation = () => Alert.alert('Disattivare account?', 'Disattivando l account conserverai preventivi, PDF, catalogo e storico. Non potrai emettere, modificare dati server o usare/condividere link pubblici finché non riattivi l account.', [{ text: 'Annulla', style: 'cancel' }, { text: 'Disattiva account', style: 'destructive', onPress: () => { void perform(deactivate); } }]);

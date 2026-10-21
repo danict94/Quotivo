@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { freeQuotaPresentation, monthlyFreeQuotaFromServerResponse } from '../src/features/quote-issuance/monthlyFreeQuota';
+import { freeQuotaInlineLabel, freeQuotaPresentation, monthlyFreeQuotaFromServerResponse } from '../src/features/quote-issuance/monthlyFreeQuota';
 
 test('quota Free presenta soltanto i valori server-authoritative 0/3, 1/3 e 3/3', () => {
   assert.deepEqual(freeQuotaPresentation({ usedThisMonth: 0, monthlyLimit: 3, remaining: 3 }), { used: '0 di 3 utilizzati', remaining: '3 disponibili' });
@@ -16,6 +16,11 @@ test('revisioni e cambio mese sono proiezioni del solo valore restituito dal ser
 
 test('la quota PRO server-authoritative non espone un limite Free', () => {
   assert.equal(freeQuotaPresentation({ usedThisMonth: 4, monthlyLimit: null, remaining: null }), null);
+  assert.equal(freeQuotaInlineLabel({ usedThisMonth: 4, monthlyLimit: null, remaining: null }), null);
+});
+
+test('Home usa una sola etichetta derivata dalla quota server-authoritative', () => {
+  assert.equal(freeQuotaInlineLabel({ usedThisMonth: 1, monthlyLimit: 3, remaining: 2 }), 'Piano Free · 1 di 3 utilizzati · 2 disponibili');
 });
 
 test('il repository non calcola soglia o confine mensile sul client', async () => {
