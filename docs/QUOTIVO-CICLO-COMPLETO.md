@@ -108,7 +108,21 @@ Riferimento strutturale bagno: 610 + 1.000 + 150 + 400 = 2.160; opzione 300; sce
 
 Pagamenti facoltativi in percentuale o importo: acconto, SAL, saldo con etichette e scadenze descrittive/data. Una modalità per piano evita ambiguità. Se il piano è completo deve coincidere col lordo dello scenario indicato; se è solo un acconto, mostrare il residuo. Gestire centesimi dell'ultima rata per far quadrare la somma. Non simulare incassi reali: si tratta di condizioni del preventivo.
 
-## 11. Date e numerazione annuale
+## 11. Dal preventivo al Lavoro e al risultato economico
+
+Un preventivo accettato può avviare un solo **Lavoro**. Il Lavoro conserva numero/revisione, cliente, titolo e importo dell'issuance accettata che lo ha originato; quella baseline non cambia se una revisione successiva viene accettata. L'aggiornamento di riferimento, se introdotto, sarà sempre un'azione esplicita e comparabile.
+
+Il ciclo operativo previsto è: **Preventivo → Lavoro → attività, tempi e persone → costi → extra → fatture → incassi → confronto previsto/reale → margine → andamento**. Il riepilogo deve distinguere ricavi dalla liquidità: baseline ed extra approvati contribuiscono ai ricavi, fatture e incassi descrivono rispettivamente il maturato e il riscosso; non sono intercambiabili.
+
+I costi del Lavoro includono materiali, persone, fornitori/subappalti, carburante, parcheggi/pedaggi, noleggi, smaltimento, attrezzature e altre spese. Tempi e persone registrano inizio/fine, giorni effettivi, ore, tempo del titolare, lavoratori e giornate/uomo. Il prodotto deve poter mostrare margine economico, margine di cassa, residuo da incassare e rendimento per giorno/ora senza chiamarli impropriamente utile netto fiscale.
+
+Andamenti e grafici leggono soltanto serie canoniche: costi cumulativi, incassi cumulativi, ricavi, previsto/reale e margine nel tempo. Possono segnalare In profitto, In perdita o Margine a rischio quando esisterà una policy di dominio esplicita; nessuna soglia viene inventata nella UI.
+
+Fatture e incassi saranno sempre collegati al Lavoro, non un modulo isolato. Una futura fiscalità userà un profilo e un provider di stima separati: imposte, contributi e netto fiscale non sono calcoli del motore economico operativo.
+
+L'AI può leggere, quando autorizzata, dati e metriche del Lavoro per spiegare rendimento, scostamenti e prezzi. Non esegue calcoli alternativi, non modifica dati direttamente e non aggiorna catalogo/prezzi senza proposta, conferma e use-case applicativo.
+
+## 12. Date e numerazione annuale
 
 Registrare automaticamente creazione/modifica/emissione con istante e fuso/offset utilizzato. Data mostrata nel documento locale; orario nello storico. Orologio del dispositivo, non data certificata.
 
@@ -120,7 +134,7 @@ Validità predefinita 30 giorni configurabile: scadenza = data emissione + giorn
 
 Migrare la vecchia sequenza senza rinumerare gli emessi. Preservare etichetta storica e snapshot. Derivare l'anno storico solo da dati attendibili; non inventarlo dove manca. Documentare il criterio conservativo e i casi legacy prima della migrazione.
 
-## 12. Anteprima reale ed emissione
+## 13. Anteprima reale ed emissione
 
 Anteprima significa visualizzare le pagine del PDF realmente generato, zoomabili e scorribili, non una ricostruzione approssimativa con componenti UI.
 
@@ -138,7 +152,7 @@ Verificare il visualizzatore disponibile sulla versione Expo effettiva: non pres
 
 Impaginazione A4: testo leggibile, descrizioni lunghe, titoli uniti al primo contenuto, tabelle con intestazioni ripetute, margini, totali non troncati, piè pagina. Nessuno spazio per campi assenti.
 
-## 13. Esportazione, condivisione e futuro invio
+## 14. Esportazione, condivisione e futuro invio
 
 PDF è il formato primario; DOCX è realmente modificabile; XLSX contiene celle/formule modificabili. Tutti derivano dagli stessi dati. Le copie modificate esternamente non aggiornano l'archivio e non sono lo snapshot canonico. Non rinominare HTML/CSV come formati Office.
 
@@ -146,7 +160,7 @@ Ora: condivisione manuale tramite dispositivo e salvataggio del file. Mostrare a
 
 Futuro: invio email/WhatsApp automatico solo dopo richiesta separata, scelta del servizio, autorizzazione, destinatario verificato, messaggio e allegato definitivi. Prevedere segreti lato server, idempotenza, retry e stati affidabili. Non implementare integrazioni, invii programmati o credenziali adesso. Salvare l'email di un cliente non autorizza alcun invio.
 
-## 14. Archivio e ciclo di vita
+## 15. Archivio e ciclo di vita
 
 Bozza modificabile → emesso immutabile → inviato (conferma manuale) → accettato o rifiutato. Annullamento registrato con motivazione senza cancellazione dello storico. Archiviazione separata dallo stato commerciale.
 
@@ -154,13 +168,13 @@ Scaduto è un'indicazione derivata per offerte aperte oltre la scadenza; non ris
 
 Ricerca per cliente, titolo, numero; filtri per anno, data, stato e archivio. Ordinamento per date reali e numeri interi, non stringhe. Dettaglio con anteprima, esportazioni, storico e duplicazione. La duplicazione genera una bozza senza numero né vecchia data emissione; permette aggiornamenti espliciti dei dati correnti. Eliminazione solo bozze con conferma.
 
-## 15. Persistenza e backup
+## 16. Persistenza e backup
 
 Schema versionato e repository separati dalla UI. Relazioni, query parametrizzate e transazioni. Snapshot nuovi completi; mantenere leggibili quelli legacy. Non eliminare database per risolvere errori di migrazione.
 
 Backup esportabile con database coerente, loghi/versioni, PDF emessi e manifesto di versione. Gestire WAL mediante backup consistente, non copiando alla cieca il solo file principale. Ripristino validato prima di sostituire dati, con copia recuperabile del precedente stato; errore o backup corrotto non deve danneggiare l'archivio. Questa fase non richiede merge tra dispositivi.
 
-## 16. Ordine operativo e risultati attesi
+## 17. Ordine operativo e risultati attesi
 
 A. Verificare delta fra questa specifica e codice/audit, aggiornare documenti in conflitto senza riscrivere il progetto. Affidabilità esistente preservata.
 B. Definire ed estendere modello unico, migrazioni, unità, calcoli, date/numero annuale e snapshot.
@@ -172,7 +186,7 @@ G. Prove integrate Android/iOS e aggiornamento documentazione. Varianti grafiche
 
 Procedere senza chiedere conferma a ogni incremento; fermarsi solo per blocchi reali che richiedono l'utente. Non dichiarare tutto completato se manca una voce. Nessun commit/push. Eventuali build/account esterni richiedono una scelta separata.
 
-## 17. Verifiche di accettazione
+## 18. Verifiche di accettazione
 
 - Input italiano anche senza blur, errori conservativi e dati dopo riavvio.
 - Migrazione con bozze/emessi legacy; nessuna rinumerazione.
@@ -206,7 +220,7 @@ Una catena revisionale mantiene numero base/anno, snapshot e PDF immutabili per 
 
 La quota visibile agli utenti FREE deriva esclusivamente dalla funzione server-authoritative condivisa con l'autorizzazione di emissione: conteggia Rev.0 del mese server, non le revisioni; per PRO limite e residuo sono null. Home e Archivio usano proiezioni canoniche (`currentQuoteProjection`, `commercialMetrics`) e non contano revisioni supersedute.
 
-## 18. Consegna di ogni incremento
+## 19. Consegna di ogni incremento
 
 Aggiornare ROADMAP/HANDOFF con funzioni reali, verifiche, limiti e prossimo passo. Restituire una breve prova guidata su Expo Go o development build, spiegando quale ambiente è stato effettivamente verificato. Mantenere traccia dei requisiti rimanenti fino al completamento.
 

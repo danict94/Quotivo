@@ -156,6 +156,20 @@ I test devono coprire quantità frazionarie, sconti, aliquote diverse
 e assenza di IVA applicata. Nessuna clausola fiscale viene dedotta
 automaticamente dal solo profilo dell'utente.
 
+## Economia del Lavoro: confini futuri
+
+Il dominio tecnico usa `Job`; l'UX usa solo **Lavoro/Lavori**. Un Job nasce una sola volta per la chain revisionale accettata e conserva la baseline dell'issuance accettata che l'ha originato. Revisioni successive, anche se accettate, non aggiornano la baseline senza un comando esplicito futuro.
+
+La pipeline condivisibile Mobile/Web è: **Job raw data → financial calculator → financial projection → metrics → trend/time series → UI/grafici/AI**. Calculator, projection, metriche, selector e contratti appartengono al dominio; SQLite e Supabase sono adapter, mentre UI, grafici e prompt consumano soltanto il risultato. Non duplicare formule in schermate, grafici, export o prompt AI.
+
+La projection separa sempre baseline preventivata, extra approvati, fatture emesse, incassi, costi reali e forecast dei costi residui. Espone le metriche `projectedRevenue`, `actualRevenue`, `actualCosts`, `forecastRemainingCosts`, `projectedFinalCost`, `cashMargin`, `economicMargin`, `marginPercent`, `totalManDays`, `ownerWorkDays`, `ownerWorkHours`, `revenuePerWorkDay`, `profitPerWorkDay`, `revenuePerHour`, `profitPerHour`, `collectedAmount`, `outstandingAmount`, `cashPosition` e scostamenti previsto/reale. Ricavi, incassi, margine economico, margine di cassa e netto fiscale rimangono concetti distinti.
+
+Le serie temporali derivate — costi cumulativi, incassi cumulativi, ricavi, previsto/reale e margine — sono contratti di dominio per UI e AI. Gli indicatori In profitto, In perdita e Margine a rischio derivano in futuro da policy dichiarate, non da soglie implicite nelle superfici.
+
+`FiscalProfile` e `TaxEstimateProvider` sono estensioni future isolate: nessun calcolo operativo deve dipendere da stime fiscali, contributive o dal netto fiscale. Le fatture e gli incassi appartengono al Lavoro e alimentano le sue projection, non un modulo contabile separato.
+
+L'AI riceve soltanto un contesto autorizzato e metriche/serie già calcolate; non ricalcola contabilità, margini o tasse e non scrive direttamente. Una proposta AI viene trasformata in una richiesta di use-case e diventa persistente solo dopo conferma dell'utente.
+
 ## Template e catalogo
 
 Separare due concetti:

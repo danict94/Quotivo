@@ -21,9 +21,10 @@ Principio: **potente dietro, semplice davanti**. Le informazioni già note vengo
 - L'esito commerciale definitivo appartiene all'emissione, non al singolo link: la prima decisione Accettato/Rifiutato vince; il link può restare consultabile.
 - Nelle superfici operative ogni catena di revisioni mostra una sola revisione corrente; le revisioni precedenti restano accessibili come storico immutabile con i rispettivi documenti.
 - Il piano e la quota FREE sono comunicati con valori authoritativi del server; una revisione non consuma una nuova emissione FREE.
-- Un preventivo accettato può alimentare un lavoro senza reinserimento manuale.
+- Una issuance accettata può generare un solo Lavoro; il Lavoro conserva come baseline immutabile l'issuance che l'ha originato e una revisione accettata successiva non lo aggiorna automaticamente.
+- Ricavi non significa incassi; margine non significa liquidità; margine operativo non significa netto fiscale.
 - Nessun successo viene mostrato prima dell'esito reale dell'operazione.
-- L'AI propone e organizza; non emette né modifica definitivamente senza conferma umana.
+- L'AI interpreta solo metriche e serie canoniche autorizzate: non ricalcola contabilità, margini o tasse e non scrive direttamente nei dati. Ogni proposta passa da conferma utente e use-case Quotivo.
 - Progressive disclosure, target touch adeguati, feedback di caricamento/errore/vuoto e leggibilità sono requisiti UX, non decorazioni.
 - Downgrade, disattivazione e scadenza di un piano non cancellano dati. L'eliminazione account è distinta, esplicita e irreversibile.
 - Ogni feature PRO deve spiegare il beneficio e offrire un percorso non aggressivo verso il piano.
@@ -70,31 +71,31 @@ Principio: **potente dietro, semplice davanti**. Le informazioni già note vengo
 
 ### Lavoro e gestione economica
 
-- **QF-030 — Lavoro/commessa:** trasformazione di un preventivo accettato in contesto operativo.
+- **QF-030 — Lavoro:** trasformazione idempotente di un'issuance accettata in contesto operativo, con riferimento alla revisione origine e baseline preventivata immutabile.
 - **QF-031 — Stati lavoro:** Da iniziare, In corso, Completato e Chiuso, con regole del modulo dedicate.
 - **QF-032 — Sopralluogo strutturato:** note, misure, richieste, verifiche e materiali prima del preventivo.
 - **QF-033 — Foto e documenti lavoro:** allegati collegati al giusto cliente, sopralluogo, lavoro o preventivo.
 - **QF-034 — Rapportino lavoro:** persone, ore, attività, materiali, problemi, extra e foto.
-- **QF-035 — Costi:** materiali, manodopera, noleggi, trasporti e altri costi per lavoro.
-- **QF-036 — Extra e variazioni:** elementi distinti dal preventivo originario.
-- **QF-037 — Preventivato vs consuntivo:** confronto fra ricavo/costi previsti e reali.
-- **QF-038 — Margine:** importo, costi, margine lordo e percentuale comprensibili.
+- **QF-035 — Costi:** costi effettivi del Lavoro per materiali, operai/dipendenti/collaboratori, fornitori/subappalti, carburante, parcheggi/pedaggi, noleggi, smaltimento, attrezzature e altre spese.
+- **QF-036 — Extra e variazioni:** extra separati dal preventivo origine, con approvazione esplicita e contributo distinto ai ricavi del Lavoro.
+- **QF-037 — Preventivato vs consuntivo:** proiezione prevista/reale di ricavi, costi, tempi e scostamenti, senza formule duplicate nelle superfici UI.
+- **QF-038 — Margine:** margine economico e di cassa, percentuale, rendimento per giorno/ora e stato di redditività comprensibili, senza pretendere un netto fiscale.
 
 ### Fiscale, incassi e continuità
 
-- **QF-039 — Fatturazione elettronica:** creazione fattura da preventivo/lavoro, controllo, invio ed esito.
-- **QF-040 — Incassi:** acconti, saldi, parziali e residuo.
+- **QF-039 — Fatturazione elettronica:** fatture collegate al Lavoro, non un modulo isolato; creazione, controllo, invio ed esito alimentano la situazione economica del Lavoro.
+- **QF-040 — Incassi:** acconti, saldi, parziali e residuo collegati alle fatture/Lavoro e distinti dai ricavi.
 - **QF-041 — Scadenze:** importi da incassare, scadenze e solleciti.
 - **QF-042 — Backup e sync:** protezione, ripristino e continuità fra dispositivi.
 - **QF-043 — Export premium:** pacchetti documentali e dati account oltre agli export base.
 
 ### AI, voce e crescita
 
-- **QF-044 — Memo vocale AI:** trascrizione e strutturazione di lavorazioni, misure, richieste e note.
-- **QF-045 — Sopralluogo vocale AI:** raccolta guidata sul posto con evidenza dei dati mancanti.
-- **QF-046 — Memoria contestuale:** informazioni legate a cliente, lavoro e relativi documenti.
-- **QF-047 — Preventivo assistito da AI:** bozza da sopralluogo con priorità a catalogo e storico dell'utente.
-- **QF-048 — Assistente Quotivo:** interfaccia operativa per interrogare e aggiornare il lavoro nel contesto corretto.
+- **QF-044 — Memo vocale AI:** trascrizione e strutturazione di lavorazioni, misure, richieste e note, con proposte confermabili.
+- **QF-045 — Sopralluogo vocale AI:** raccolta guidata sul posto con evidenza dei dati mancanti e passaggio ai dati strutturati.
+- **QF-046 — Memoria contestuale:** informazioni autorizzate e legate a cliente, Lavoro, documenti e storico economico.
+- **QF-047 — Preventivo assistito da AI:** bozza da sopralluogo con priorità a catalogo, costi reali storici e storico dell'utente; ogni aggiornamento catalogo resta proposto, mai automatico.
+- **QF-048 — Assistente Quotivo:** interrogazione autorizzata di preventivo, Lavoro, attività, tempi, persone, costi, extra, fatture, incassi, catalogo, metriche e serie temporali; propone azioni che il use-case applica solo dopo conferma.
 - **QF-049 — Onboarding e analytics prodotto:** primo valore rapido e misurazione essenziale del percorso utente.
 - **QF-050 — Referral e creator:** campagne attribuibili con beneficio e conversione misurabili.
 
@@ -106,3 +107,23 @@ Principio: **potente dietro, semplice davanti**. Le informazioni già note vengo
 4. Estendere dal preventivo al lavoro e alla redditività: QF-030—QF-038.
 5. Chiudere fatturazione, incassi e continuità: QF-039—QF-043.
 6. Aggiungere AI operativa e crescita quando il nucleo è maturo: QF-044—QF-050.
+
+## Economia del Lavoro e lettura AI
+
+Il Lavoro rende leggibile una catena unica: **Preventivo → Lavoro → attività/tempo/persone → costi → extra → fatture → incassi → previsto vs reale → margine → andamento**.
+
+### Dati economici e temporali canonici
+
+- Ricavi: baseline del preventivo accettato, extra approvati, fatture emesse e incassi restano valori distinti.
+- Costi: materiali, persone, fornitori/subappalti, carburante, parcheggi/pedaggi, noleggi, smaltimento, attrezzature e altre spese.
+- Tempo: data di inizio/fine, giorni effettivi, ore, tempo del titolare, lavoratori impiegati, giorni/ore per lavoratore e giornate/uomo totali.
+
+Le metriche canoniche previste sono `projectedRevenue`, `actualRevenue`, `actualCosts`, `forecastRemainingCosts`, `projectedFinalCost`, `cashMargin`, `economicMargin`, `marginPercent`, `totalManDays`, `ownerWorkDays`, `ownerWorkHours`, `revenuePerWorkDay`, `profitPerWorkDay`, `revenuePerHour`, `profitPerHour`, `collectedAmount`, `outstandingAmount`, `cashPosition` e gli scostamenti previsto/reale. Il loro significato è di dominio e non dipende da grafici, UI o prompt.
+
+Le serie temporali canoniche previste comprendono costi cumulativi, incassi cumulativi, ricavi, previsto vs reale e margine nel tempo. Possono supportare gli stati informativi **In profitto**, **In perdita** e **Margine a rischio**, senza fissare ora soglie arbitrarie.
+
+### Fiscalità e catalogo futuro
+
+Il motore economico operativo resta indipendente dalla fiscalità. In futuro `FiscalProfile` e `TaxEstimateProvider` potranno stimare imposte, contributi e netto fiscale, ma non sono parte delle metriche operative né autorizzano ora calcoli IRPEF, INPS, IVA da versare, imposte societarie o costo fiscale dei dipendenti.
+
+Catalogo e AI potranno confrontare prezzi personali, costi reali storici, listini fornitori e prezzari regionali/ufficiali, evidenziarne la differenza percentuale e proporre un aggiornamento. Nessun prezzo o catalogo viene aggiornato senza conferma esplicita.

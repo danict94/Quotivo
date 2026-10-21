@@ -53,25 +53,25 @@
 | 27 | QF-027 | TODO | Codici promo non verificati. | Regole, backend e test. |
 | 28 | QF-028 | TODO | Campagna Esigenta non verificata. | Promo, entitlement ed E2E. |
 | 29 | QF-029 | DEFERRED | Billing dipende da pricing e provider definitivi. | Decisione prodotto e integrazione store. |
-| 30 | QF-030 | TODO | Modulo lavoro/commessa non verificato. | Modello, UX e test. |
+| 30 | QF-030 | TODO | Foundation Job/Lavoro: una sola creazione idempotente per chain accettata, baseline immutabile dell'issuance origine e nessun trasferimento automatico da revisioni successive. | Authority remota, cache locale, capability START/OPEN e UX/test. |
 | 31 | QF-031 | TODO | Stati lavoro non verificati. | Regole prodotto e implementazione. |
 | 32 | QF-032 | TODO | Sopralluogo strutturato non verificato. | UX, modello e test. |
 | 33 | QF-033 | TODO | Media/documenti lavoro non verificati. | Modello, storage e UX. |
 | 34 | QF-034 | TODO | Rapportino non verificato. | UX, modello e test. |
-| 35 | QF-035 | TODO | Costi lavoro non verificati. | Modello, calcoli e test. |
-| 36 | QF-036 | TODO | Extra/variazioni non verificati. | Regole e test. |
-| 37 | QF-037 | TODO | Consuntivo non verificato. | Calcoli, UX e test. |
-| 38 | QF-038 | TODO | Margine non verificato. | Calcoli e UX. |
-| 39 | QF-039 | TODO | Fatturazione elettronica non verificata. | Brief fiscale, provider e test. |
-| 40 | QF-040 | TODO | Incassi non verificati. | Modello, UX e test. |
+| 35 | QF-035 | TODO | Costi canonici per categoria e persone del Lavoro non verificati. | Modello, calculator condiviso e test. |
+| 36 | QF-036 | TODO | Extra approvati separati dalla baseline e dai ricavi effettivi non verificati. | Regole, modello e test. |
+| 37 | QF-037 | TODO | Proiezione prevista/reale, tempi, forecast costi e serie temporali non verificati. | Financial projection, UX e test. |
+| 38 | QF-038 | TODO | Margine economico/cassa, metriche per giorno/ora e segnali senza soglie arbitrarie non verificati. | Calculator, UX e test. |
+| 39 | QF-039 | TODO | Fatture collegate al Lavoro e alla sua situazione economica non verificate. | Brief fiscale, provider e test. |
+| 40 | QF-040 | TODO | Incassi collegati a fatture/Lavoro e distinti dai ricavi non verificati. | Modello, UX e test. |
 | 41 | QF-041 | TODO | Scadenze/solleciti non verificati. | Modello, UX e test. |
 | 42 | QF-042 | TODO | Backup/sync completo non verificato. | Progetto, ripristino e E2E. |
 | 43 | QF-043 | TODO | Export premium/dati account non verificati. | Prodotto e test. |
-| 44 | QF-044 | TODO | Memo vocale AI non verificato. | Privacy, UX e integrazione. |
-| 45 | QF-045 | TODO | Sopralluogo vocale AI non verificato. | UX, privacy e integrazione. |
-| 46 | QF-046 | TODO | Memoria contestuale non verificata. | Modello dati, privacy e UX. |
-| 47 | QF-047 | TODO | Preventivo AI assistito non verificato. | Guardrail, UX e test. |
-| 48 | QF-048 | TODO | Assistente Quotivo non verificato. | Scope, autorizzazioni e UX. |
+| 44 | QF-044 | TODO | Memo vocale AI con proposte confermabili non verificato. | Privacy, UX e integrazione. |
+| 45 | QF-045 | TODO | Sopralluogo vocale AI verso dati strutturati non verificato. | UX, privacy e integrazione. |
+| 46 | QF-046 | TODO | Memoria contestuale autorizzata, inclusa lettura economica del Lavoro, non verificata. | Modello dati, privacy e UX. |
+| 47 | QF-047 | TODO | Preventivo AI assistito da catalogo/costi storici, senza modifiche automatiche, non verificato. | Guardrail, UX e test. |
+| 48 | QF-048 | TODO | Assistente che interpreta metriche canoniche senza ricalcolarle né scrivere direttamente non verificato. | Scope, autorizzazioni e UX. |
 | 49 | QF-049 | TODO | Onboarding prodotto/analytics non verificati. | Decisioni privacy, UX e misurazione. |
 | 50 | QF-050 | DEFERRED | Referral/creator dipende dal prodotto pronto al lancio. | Piano campagna e analytics. |
 
