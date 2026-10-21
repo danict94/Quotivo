@@ -422,6 +422,21 @@ export const migrations: Migration[] = [
     ALTER TABLE quote_share_links ADD COLUMN issuance_snapshot_sync_state TEXT
       CHECK (issuance_snapshot_sync_state IN ('PENDING', 'SYNCED') OR issuance_snapshot_sync_state IS NULL);
   ` },
+  { version: 18, sql: `
+    CREATE TABLE jobs (
+      id TEXT PRIMARY KEY NOT NULL,
+      owner_user_id TEXT NOT NULL,
+      source_root_issuance_id TEXT NOT NULL UNIQUE,
+      source_issuance_id TEXT NOT NULL,
+      source_revision_number INTEGER NOT NULL CHECK (source_revision_number >= 0),
+      client_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      quoted_amount_cents INTEGER NOT NULL CHECK (quoted_amount_cents >= 0),
+      currency TEXT NOT NULL CHECK (currency = 'EUR'),
+      status TEXT NOT NULL CHECK (status = 'OPEN'),
+      created_at TEXT NOT NULL
+    );
+  ` },
 ];
 
 export interface MigrationDatabase {
