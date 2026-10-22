@@ -10,7 +10,7 @@ test('il dettaglio issued apre Riepilogo e definisce le tre tab locali', () => {
 });
 
 test('le tab sono collegate allo stato locale e alle tre superfici del dettaglio', async () => {
-  const source = await readFile(path.join(process.cwd(), 'App.tsx'), 'utf8');
+  const source = await readFile(path.join(process.cwd(), 'src', 'features', 'quote-editor', 'QuoteEditorScreen.tsx'), 'utf8');
   assert.match(source, /useState<IssuedQuoteDetailTab>\(defaultIssuedQuoteDetailTab\)/);
   assert.match(source, /<SegmentedTabs tabs=\{issuedQuoteDetailTabs\} value=\{activeTab\} onChange=\{setActiveTab\}\/>/);
   assert.match(source, /activeTab==='summary'/);
@@ -19,7 +19,7 @@ test('le tab sono collegate allo stato locale e alle tre superfici del dettaglio
 });
 
 test('Documento mantiene la corrente separata e rende lo storico revisioni read-only', async () => {
-  const source = await readFile(path.join(process.cwd(), 'App.tsx'), 'utf8');
+  const source = await readFile(path.join(process.cwd(), 'src', 'features', 'quote-editor', 'QuoteEditorScreen.tsx'), 'utf8');
   assert.match(source, /Storico revisioni \(\$\{revisionHistory\.length\}\)/);
   assert.match(source, /<DetailListRow key=\{revision\.id\}/);
   assert.match(source, /actionLabel="Apri PDF" onAction=\{\(\)=>void onPreviewRevision\(revision\)\}/);
