@@ -462,6 +462,22 @@ export const migrations: Migration[] = [
     DROP TABLE jobs;
     ALTER TABLE jobs_v19 RENAME TO jobs;
   ` },
+  { version: 20, sql: `
+    CREATE TABLE job_cost_entries (
+      id TEXT PRIMARY KEY NOT NULL, owner_user_id TEXT NOT NULL, job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      request_key TEXT NOT NULL, category TEXT NOT NULL CHECK (category IN ('MATERIALS','WORKER','SUBCONTRACTOR','FUEL','TOLLS_PARKING','RENTAL','DISPOSAL','EQUIPMENT','OTHER')),
+      description TEXT NOT NULL, amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0), occurred_at TEXT NOT NULL, worker_label TEXT,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(owner_user_id, request_key)
+    );
+    CREATE TABLE job_work_entries (
+      id TEXT PRIMARY KEY NOT NULL, owner_user_id TEXT NOT NULL, job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      request_key TEXT NOT NULL, person_label TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('OWNER','WORKER','COLLABORATOR')),
+      work_date TEXT NOT NULL, duration_minutes INTEGER NOT NULL CHECK (duration_minutes > 0), cost_cents INTEGER CHECK (cost_cents >= 0), note TEXT,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(owner_user_id, request_key)
+    );
+    CREATE INDEX job_cost_entries_job_occurred_at ON job_cost_entries(job_id, occurred_at DESC);
+    CREATE INDEX job_work_entries_job_work_date ON job_work_entries(job_id, work_date DESC);
+  ` },
 ];
 
 export interface MigrationDatabase {

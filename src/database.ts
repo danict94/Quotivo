@@ -16,6 +16,8 @@ import { repairSingleLegacyIssuedDraft } from './features/local-data/repairLegac
 import { reconcileVerifiedLegacyIssuedQuote } from './features/quote-issuance/reconcileIssuedQuoteBootstrap';
 import { Job } from './features/jobs/JobRepository';
 import { SQLiteJobCacheRepository } from './features/jobs/SQLiteJobCacheRepository';
+import { SQLiteJobInputsCacheRepository } from './features/jobs/SQLiteJobInputsCacheRepository';
+import { JobCostEntry, JobInputs, JobWorkEntry } from './features/jobs/JobInputsRepository';
 
 const localDatabaseScope = createAccountDatabaseScope((databaseName) => SQLite.openDatabaseAsync(databaseName));
 function getActiveDatabase() { return localDatabaseScope.current(); }
@@ -203,6 +205,12 @@ function jobCache(db: Awaited<ReturnType<typeof getActiveDatabase>>) { return ne
 export async function listCachedJobs(): Promise<readonly Job[]> { return jobCache(await getActiveDatabase()).list(); }
 export async function loadCachedJobBySourceRootIssuanceId(sourceRootIssuanceId: string): Promise<Job | null> { return jobCache(await getActiveDatabase()).getBySourceRootIssuanceId(sourceRootIssuanceId); }
 export async function saveCachedJob(job: Job): Promise<void> { await jobCache(await getActiveDatabase()).save(job); }
+function jobInputsCache(db: Awaited<ReturnType<typeof getActiveDatabase>>) { return new SQLiteJobInputsCacheRepository(db); }
+export async function listCachedJobInputs(jobId: string): Promise<JobInputs> { return jobInputsCache(await getActiveDatabase()).list(jobId); }
+export async function saveCachedJobCost(entry: JobCostEntry): Promise<void> { await jobInputsCache(await getActiveDatabase()).saveCost(entry); }
+export async function removeCachedJobCost(entryId: string): Promise<void> { await jobInputsCache(await getActiveDatabase()).removeCost(entryId); }
+export async function saveCachedJobWork(entry: JobWorkEntry): Promise<void> { await jobInputsCache(await getActiveDatabase()).saveWork(entry); }
+export async function removeCachedJobWork(entryId: string): Promise<void> { await jobInputsCache(await getActiveDatabase()).removeWork(entryId); }
 export async function loadQuoteReferenceByIssuanceId(issuanceId: string): Promise<{ number: number; year: number } | null> {
   const db = await getActiveDatabase();
   const row = await db.getFirstAsync<{ number: number | null; number_year: number | null }>('SELECT q.number, q.number_year FROM quotes q INNER JOIN quote_share_links link ON link.quote_id = q.id WHERE link.issuance_id = ?', issuanceId);
