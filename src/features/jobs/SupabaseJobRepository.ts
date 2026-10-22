@@ -33,6 +33,12 @@ function capabilityFrom(value: unknown): JobCapability {
   throw new Error('JOB_REMOTE_RESPONSE_INVALID');
 }
 
+function firstJob(value: unknown): Job {
+  const row = Array.isArray(value) ? value[0] as JobRow | undefined : undefined;
+  if (!row) throw new Error('JOB_REMOTE_RESPONSE_INVALID');
+  return jobFrom(row);
+}
+
 export class SupabaseJobRepository implements JobRemoteRepository {
   constructor(private readonly client: JobRpcClient) {}
 
@@ -45,16 +51,12 @@ export class SupabaseJobRepository implements JobRemoteRepository {
   async start(issuanceId: string): Promise<Job> {
     const { data, error } = await this.client.rpc('start_job', { p_issuance_id: issuanceId });
     if (error) throw new Error(error.message);
-    const row = Array.isArray(data) ? data[0] as JobRow | undefined : undefined;
-    if (!row) throw new Error('JOB_REMOTE_RESPONSE_INVALID');
-    return jobFrom(row);
+    return firstJob(data);
   }
 
   async transitionStatus(jobId: string, targetStatus: JobStatusTransition): Promise<Job> {
     const { data, error } = await this.client.rpc('transition_job_status', { p_job_id: jobId, p_target_status: targetStatus });
     if (error) throw new Error(error.message);
-    const row = Array.isArray(data) ? data[0] as JobRow | undefined : undefined;
-    if (!row) throw new Error('JOB_REMOTE_RESPONSE_INVALID');
-    return jobFrom(row);
+    return firstJob(data);
   }
 }
