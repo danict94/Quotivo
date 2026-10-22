@@ -14,6 +14,8 @@ import { SQLiteRevisionChainCapabilityRepository } from './features/revisions/SQ
 import { deriveRecentWorkItems, RecentWorkItem } from './features/recent-work-items/recentWorkItems';
 import { repairSingleLegacyIssuedDraft } from './features/local-data/repairLegacyIssuedDraft';
 import { reconcileVerifiedLegacyIssuedQuote } from './features/quote-issuance/reconcileIssuedQuoteBootstrap';
+import { Job } from './features/jobs/JobRepository';
+import { SQLiteJobCacheRepository } from './features/jobs/SQLiteJobCacheRepository';
 
 const localDatabaseScope = createAccountDatabaseScope((databaseName) => SQLite.openDatabaseAsync(databaseName));
 function getActiveDatabase() { return localDatabaseScope.current(); }
@@ -194,6 +196,17 @@ export async function listQuotes() {
   const quotes = await db.getAllAsync<QuoteRow>('SELECT * FROM quotes ORDER BY COALESCE(issued_at, updated_at) DESC');
   const items = await db.getAllAsync<ItemRow>('SELECT * FROM quote_items ORDER BY position');
   return quotes.map((quote) => hydrate(quote, items));
+}
+
+/** Local read model for remote-authoritative Jobs. UI reaches it only through the Jobs feature. */
+function jobCache(db: Awaited<ReturnType<typeof getActiveDatabase>>) { return new SQLiteJobCacheRepository(db); }
+export async function listCachedJobs(): Promise<readonly Job[]> { return jobCache(await getActiveDatabase()).list(); }
+export async function loadCachedJobBySourceRootIssuanceId(sourceRootIssuanceId: string): Promise<Job | null> { return jobCache(await getActiveDatabase()).getBySourceRootIssuanceId(sourceRootIssuanceId); }
+export async function saveCachedJob(job: Job): Promise<void> { await jobCache(await getActiveDatabase()).save(job); }
+export async function loadQuoteReferenceByIssuanceId(issuanceId: string): Promise<{ number: number; year: number } | null> {
+  const db = await getActiveDatabase();
+  const row = await db.getFirstAsync<{ number: number | null; number_year: number | null }>('SELECT q.number, q.number_year FROM quotes q INNER JOIN quote_share_links link ON link.quote_id = q.id WHERE link.issuance_id = ?', issuanceId);
+  return row && row.number !== null && row.number_year !== null ? { number: row.number, year: row.number_year } : null;
 }
 
 /** Voci derivate dai preventivi emessi: non è una seconda tabella né un catalogo implicito. */

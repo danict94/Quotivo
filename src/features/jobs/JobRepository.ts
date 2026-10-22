@@ -1,3 +1,6 @@
+export type JobStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+export type JobStatusTransition = 'PAUSED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+
 export type Job = Readonly<{
   id: string;
   ownerUserId: string;
@@ -8,8 +11,12 @@ export type Job = Readonly<{
   title: string;
   quotedAmountCents: number;
   currency: 'EUR';
-  status: 'OPEN';
+  status: JobStatus;
   createdAt: string;
+  startedAt: string;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  updatedAt: string;
 }>;
 
 export type JobCapability =
@@ -21,9 +28,15 @@ export type JobCapability =
 export interface JobRemoteRepository {
   resolveCapability(issuanceId: string): Promise<JobCapability>;
   start(issuanceId: string): Promise<Job>;
+  transitionStatus(jobId: string, targetStatus: JobStatusTransition): Promise<Job>;
 }
 
 export interface JobCacheRepository {
   getBySourceRootIssuanceId(sourceRootIssuanceId: string): Promise<Job | null>;
   save(job: Job): Promise<void>;
+}
+
+/** Read model for the local, remote-authoritative Job projection. */
+export interface JobProjectionRepository {
+  list(): Promise<readonly Job[]>;
 }

@@ -437,6 +437,31 @@ export const migrations: Migration[] = [
       created_at TEXT NOT NULL
     );
   ` },
+  { version: 19, sql: `
+    CREATE TABLE jobs_v19 (
+      id TEXT PRIMARY KEY NOT NULL,
+      owner_user_id TEXT NOT NULL,
+      source_root_issuance_id TEXT NOT NULL UNIQUE,
+      source_issuance_id TEXT NOT NULL,
+      source_revision_number INTEGER NOT NULL CHECK (source_revision_number >= 0),
+      client_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      quoted_amount_cents INTEGER NOT NULL CHECK (quoted_amount_cents >= 0),
+      currency TEXT NOT NULL CHECK (currency = 'EUR'),
+      status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED')),
+      created_at TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      cancelled_at TEXT,
+      updated_at TEXT NOT NULL,
+      CHECK ((status = 'COMPLETED') = (completed_at IS NOT NULL)),
+      CHECK ((status = 'CANCELLED') = (cancelled_at IS NOT NULL))
+    );
+    INSERT INTO jobs_v19 (id, owner_user_id, source_root_issuance_id, source_issuance_id, source_revision_number, client_name, title, quoted_amount_cents, currency, status, created_at, started_at, completed_at, cancelled_at, updated_at)
+      SELECT id, owner_user_id, source_root_issuance_id, source_issuance_id, source_revision_number, client_name, title, quoted_amount_cents, currency, 'ACTIVE', created_at, created_at, NULL, NULL, created_at FROM jobs;
+    DROP TABLE jobs;
+    ALTER TABLE jobs_v19 RENAME TO jobs;
+  ` },
 ];
 
 export interface MigrationDatabase {
