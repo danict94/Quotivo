@@ -478,6 +478,43 @@ export const migrations: Migration[] = [
     CREATE INDEX job_cost_entries_job_occurred_at ON job_cost_entries(job_id, occurred_at DESC);
     CREATE INDEX job_work_entries_job_work_date ON job_work_entries(job_id, work_date DESC);
   ` },
+  { version: 21, sql: `
+    -- QF-042A: SQLite becomes a projection with a durable, retryable outbox.
+    ALTER TABLE clients ADD COLUMN deleted_at TEXT;
+    ALTER TABLE catalog_items ADD COLUMN deleted_at TEXT;
+    ALTER TABLE measurement_units ADD COLUMN updated_at TEXT;
+    ALTER TABLE measurement_units ADD COLUMN deleted_at TEXT;
+    ALTER TABLE vat_rates ADD COLUMN updated_at TEXT;
+    ALTER TABLE vat_rates ADD COLUMN deleted_at TEXT;
+    UPDATE measurement_units SET updated_at = created_at WHERE updated_at IS NULL;
+    UPDATE vat_rates SET updated_at = created_at WHERE updated_at IS NULL;
+    CREATE TABLE durability_entity_state (
+      entity_type TEXT NOT NULL CHECK (entity_type IN ('BUSINESS_PROFILE','CLIENT','CATALOG_ITEM','MEASUREMENT_UNIT','VAT_RATE')),
+      entity_id TEXT NOT NULL,
+      remote_version INTEGER NOT NULL CHECK (remote_version > 0),
+      synced_at TEXT NOT NULL,
+      PRIMARY KEY (entity_type, entity_id)
+    );
+    CREATE TABLE durability_sync_outbox (
+      operation_id TEXT PRIMARY KEY NOT NULL,
+      entity_type TEXT NOT NULL CHECK (entity_type IN ('BUSINESS_PROFILE','CLIENT','CATALOG_ITEM','MEASUREMENT_UNIT','VAT_RATE')),
+      entity_id TEXT NOT NULL,
+      expected_version INTEGER,
+      payload_json TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING','CONFLICT')),
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE durability_sync_conflicts (
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      operation_id TEXT NOT NULL,
+      local_payload_json TEXT NOT NULL,
+      remote_record_json TEXT NOT NULL,
+      detected_at TEXT NOT NULL,
+      PRIMARY KEY (entity_type, entity_id)
+    );
+    CREATE INDEX durability_outbox_pending ON durability_sync_outbox(state, created_at);
+  ` },
 ];
 
 export interface MigrationDatabase {

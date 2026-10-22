@@ -18,6 +18,7 @@ import { Job } from './features/jobs/JobRepository';
 import { SQLiteJobCacheRepository } from './features/jobs/SQLiteJobCacheRepository';
 import { SQLiteJobInputsCacheRepository } from './features/jobs/SQLiteJobInputsCacheRepository';
 import { JobCostEntry, JobInputs, JobWorkEntry } from './features/jobs/JobInputsRepository';
+import { DurabilityEntityRecord, DurabilityEntityType, DurabilityLocalRepository, DurabilityOutboxOperation } from './features/durability/DurabilityContracts';
 
 const localDatabaseScope = createAccountDatabaseScope((databaseName) => SQLite.openDatabaseAsync(databaseName));
 function getActiveDatabase() { return localDatabaseScope.current(); }
@@ -159,6 +160,119 @@ export type Client = { id:string; name:string; contactName:string; phone:string;
 export type CatalogItem = { id:string; title:string; priceMode:'measured'|'body'; unitCode:string|null; unitLabel:string; priceCents:number; createdAt:string; updatedAt:string };
 const legacyUnitCodes: Record<string, string> = { 'm²':'sqm', 'ml':'linear_m', 'm³':'cubic_m', 'pz':'piece', 'punti':'point', 'h':'hour', 'gg':'day' };
 
+const durabilityListeners = new Set<() => void>();
+export function subscribeDurabilityChanges(listener: () => void) { durabilityListeners.add(listener); return () => { durabilityListeners.delete(listener); }; }
+function notifyDurabilityChange() { for (const listener of durabilityListeners) listener(); }
+
+type DurabilityRow = { entityType: DurabilityEntityType; entityId: string; deletedAt: string | null; payload: Record<string, unknown> };
+function json(value: unknown) { return JSON.stringify(value); }
+function sameJson(a: unknown, b: unknown) { return json(a) === json(b); }
+function durabilityString(payload: Readonly<Record<string, unknown>>, key: string) { const value = payload[key]; if (typeof value !== 'string') throw new Error('DURABILITY_REMOTE_RESPONSE_INVALID'); return value; }
+function durabilityInteger(payload: Readonly<Record<string, unknown>>, key: string) { const value = payload[key]; if (typeof value !== 'number' || !Number.isSafeInteger(value)) throw new Error('DURABILITY_REMOTE_RESPONSE_INVALID'); return value; }
+function durabilityBoolean(payload: Readonly<Record<string, unknown>>, key: string) { const value = payload[key]; if (typeof value !== 'boolean') throw new Error('DURABILITY_REMOTE_RESPONSE_INVALID'); return value; }
+function durabilityNullableString(payload: Readonly<Record<string, unknown>>, key: string) { const value = payload[key]; if (value !== null && typeof value !== 'string') throw new Error('DURABILITY_REMOTE_RESPONSE_INVALID'); return value; }
+
+async function localDurabilityRow(db: SQLite.SQLiteDatabase, entityType: DurabilityEntityType, entityId: string): Promise<DurabilityRow | null> {
+  if (entityType === 'BUSINESS_PROFILE') {
+    const row = await db.getFirstAsync<{business_name:string;tax_id:string;vat_number:string;address:string;postal_code:string;city:string;province:string;email:string;phone:string;website:string;default_conditions:string;default_validity_days:number;default_payment_terms:string}>('SELECT * FROM business_profiles WHERE id=1');
+    return row ? { entityType, entityId: 'profile', deletedAt: null, payload: { businessName:row.business_name, taxId:row.tax_id, vatNumber:row.vat_number, address:row.address, postalCode:row.postal_code, city:row.city, province:row.province, email:row.email, phone:row.phone, website:row.website, defaultConditions:row.default_conditions, defaultValidityDays:row.default_validity_days, defaultPaymentTerms:row.default_payment_terms } } : null;
+  }
+  if (entityType === 'CLIENT') {
+    const row = await db.getFirstAsync<{id:string;name:string;contact_name:string;phone:string;email:string;address:string;tax_id:string;vat_number:string;deleted_at:string|null}>('SELECT * FROM clients WHERE id=?', entityId);
+    return row ? { entityType, entityId:row.id, deletedAt:row.deleted_at, payload:{name:row.name,contactName:row.contact_name,phone:row.phone,email:row.email,address:row.address,taxId:row.tax_id,vatNumber:row.vat_number} } : null;
+  }
+  if (entityType === 'CATALOG_ITEM') {
+    const row = await db.getFirstAsync<{id:string;title:string;price_mode:'measured'|'body';unit_code:string|null;unit_label:string;price_cents:number;deleted_at:string|null}>('SELECT * FROM catalog_items WHERE id=?', entityId);
+    return row ? { entityType, entityId:row.id, deletedAt:row.deleted_at, payload:{title:row.title,priceMode:row.price_mode,unitCode:row.unit_code,unitLabel:row.unit_label,priceCents:row.price_cents} } : null;
+  }
+  if (entityType === 'MEASUREMENT_UNIT') {
+    const row = await db.getFirstAsync<{code:string;label:string;is_custom:number;deleted_at:string|null}>('SELECT * FROM measurement_units WHERE code=?', entityId);
+    return row ? { entityType, entityId:row.code, deletedAt:row.deleted_at, payload:{label:row.label,isCustom:Boolean(row.is_custom)} } : null;
+  }
+  const row = await db.getFirstAsync<{code:string;label:string;rate_basis_points:number;is_custom:number;deleted_at:string|null}>('SELECT * FROM vat_rates WHERE code=?', entityId);
+  return row ? { entityType, entityId:row.code, deletedAt:row.deleted_at, payload:{label:row.label,rateBasisPoints:row.rate_basis_points,isCustom:Boolean(row.is_custom)} } : null;
+}
+
+async function localDurabilityRows(db: SQLite.SQLiteDatabase, entityType: DurabilityEntityType): Promise<DurabilityRow[]> {
+  if (entityType === 'BUSINESS_PROFILE') { const row = await localDurabilityRow(db, entityType, 'profile'); return row ? [row] : []; }
+  const ids = entityType === 'CLIENT' ? await db.getAllAsync<{id:string}>('SELECT id FROM clients')
+    : entityType === 'CATALOG_ITEM' ? await db.getAllAsync<{id:string}>('SELECT id FROM catalog_items')
+      : await db.getAllAsync<{code:string}>(entityType === 'MEASUREMENT_UNIT' ? 'SELECT code FROM measurement_units' : 'SELECT code FROM vat_rates');
+  return (await Promise.all(ids.map((row) => localDurabilityRow(db, entityType, 'id' in row ? row.id : row.code)))).filter((row): row is DurabilityRow => row !== null);
+}
+
+function profileHasDurableContent(row: DurabilityRow) {
+  return Object.entries(row.payload).some(([key, value]) => key !== 'defaultValidityDays' && value !== '');
+}
+
+async function queueDurabilityEntity(db: SQLite.SQLiteDatabase, entityType: DurabilityEntityType, entityId: string) {
+  const local = await localDurabilityRow(db, entityType, entityId);
+  if (!local) return;
+  const state = await db.getFirstAsync<{remote_version:number}>('SELECT remote_version FROM durability_entity_state WHERE entity_type=? AND entity_id=?', entityType, local.entityId);
+  const payload = { ...local.payload, deleted: local.deletedAt !== null };
+  await db.runAsync('INSERT INTO durability_sync_outbox(operation_id,entity_type,entity_id,expected_version,payload_json,state,created_at) VALUES(?,?,?,?,?,?,?)', newId('durability'), entityType, local.entityId, state?.remote_version ?? null, json(payload), 'PENDING', new Date().toISOString());
+}
+
+async function applyRemoteDurabilityRecord(db: SQLite.SQLiteDatabase, record: DurabilityEntityRecord, force = false) {
+  const blocked = await db.getFirstAsync<{operation_id:string}>('SELECT operation_id FROM durability_sync_outbox WHERE entity_type=? AND entity_id=? LIMIT 1', record.entityType, record.entityId);
+  const current = await localDurabilityRow(db, record.entityType, record.entityId);
+  const state = await db.getFirstAsync<{remote_version:number}>('SELECT remote_version FROM durability_entity_state WHERE entity_type=? AND entity_id=?', record.entityType, record.entityId);
+  if (!force && blocked) return;
+  if (!force && !state && current && !(record.entityType === 'BUSINESS_PROFILE' && !profileHasDurableContent(current)) && !sameJson(current.payload, record.payload)) return;
+  if (!force && state && state.remote_version >= record.version) return;
+  const p = record.payload;
+  if (record.entityType === 'BUSINESS_PROFILE') {
+    await db.runAsync('UPDATE business_profiles SET business_name=?,tax_id=?,vat_number=?,address=?,postal_code=?,city=?,province=?,email=?,phone=?,website=?,default_conditions=?,default_validity_days=?,default_payment_terms=?,updated_at=? WHERE id=1', durabilityString(p,'businessName'), durabilityString(p,'taxId'), durabilityString(p,'vatNumber'), durabilityString(p,'address'), durabilityString(p,'postalCode'), durabilityString(p,'city'), durabilityString(p,'province'), durabilityString(p,'email'), durabilityString(p,'phone'), durabilityString(p,'website'), durabilityString(p,'defaultConditions'), durabilityInteger(p,'defaultValidityDays'), durabilityString(p,'defaultPaymentTerms'), record.updatedAt);
+  } else if (record.entityType === 'CLIENT') {
+    await db.runAsync('INSERT INTO clients(id,name,contact_name,phone,email,address,tax_id,vat_number,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,contact_name=excluded.contact_name,phone=excluded.phone,email=excluded.email,address=excluded.address,tax_id=excluded.tax_id,vat_number=excluded.vat_number,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at', record.entityId, durabilityString(p,'name'), durabilityString(p,'contactName'), durabilityString(p,'phone'), durabilityString(p,'email'), durabilityString(p,'address'), durabilityString(p,'taxId'), durabilityString(p,'vatNumber'), record.createdAt, record.updatedAt, record.deletedAt);
+  } else if (record.entityType === 'CATALOG_ITEM') {
+    await db.runAsync('INSERT INTO catalog_items(id,title,price_mode,unit_code,unit_label,price_cents,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,price_mode=excluded.price_mode,unit_code=excluded.unit_code,unit_label=excluded.unit_label,price_cents=excluded.price_cents,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at', record.entityId, durabilityString(p,'title'), durabilityString(p,'priceMode'), durabilityNullableString(p,'unitCode'), durabilityString(p,'unitLabel'), durabilityInteger(p,'priceCents'), record.createdAt, record.updatedAt, record.deletedAt);
+  } else if (record.entityType === 'MEASUREMENT_UNIT') {
+    await db.runAsync('INSERT INTO measurement_units(code,label,is_custom,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?) ON CONFLICT(code) DO UPDATE SET label=excluded.label,is_custom=excluded.is_custom,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at', record.entityId, durabilityString(p,'label'), durabilityBoolean(p,'isCustom') ? 1 : 0, record.createdAt, record.updatedAt, record.deletedAt);
+  } else {
+    await db.runAsync('INSERT INTO vat_rates(code,label,rate_basis_points,is_custom,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(code) DO UPDATE SET label=excluded.label,rate_basis_points=excluded.rate_basis_points,is_custom=excluded.is_custom,updated_at=excluded.updated_at,deleted_at=excluded.deleted_at', record.entityId, durabilityString(p,'label'), durabilityInteger(p,'rateBasisPoints'), durabilityBoolean(p,'isCustom') ? 1 : 0, record.createdAt, record.updatedAt, record.deletedAt);
+  }
+  await db.runAsync('INSERT INTO durability_entity_state(entity_type,entity_id,remote_version,synced_at) VALUES(?,?,?,?) ON CONFLICT(entity_type,entity_id) DO UPDATE SET remote_version=excluded.remote_version,synced_at=excluded.synced_at', record.entityType, record.entityId, record.version, new Date().toISOString());
+}
+
+/** Local adapter for the remote durability protocol. */
+export function durabilityLocalRepository(): DurabilityLocalRepository {
+  return {
+    async prepareLegacyUpload() {
+      const db = await getActiveDatabase();
+      for (const entityType of ['BUSINESS_PROFILE','CLIENT','CATALOG_ITEM','MEASUREMENT_UNIT','VAT_RATE'] as const) {
+        for (const row of await localDurabilityRows(db, entityType)) {
+          if (entityType === 'BUSINESS_PROFILE' && !profileHasDurableContent(row)) continue;
+          const state = await db.getFirstAsync<{remote_version:number}>('SELECT remote_version FROM durability_entity_state WHERE entity_type=? AND entity_id=?', entityType, row.entityId);
+          const queued = await db.getFirstAsync<{operation_id:string}>('SELECT operation_id FROM durability_sync_outbox WHERE entity_type=? AND entity_id=? LIMIT 1', entityType, row.entityId);
+          if (!state && !queued) await queueDurabilityEntity(db, entityType, row.entityId);
+        }
+      }
+    },
+    async listPending() {
+      const db = await getActiveDatabase();
+      const rows = await db.getAllAsync<{operation_id:string;entity_type:DurabilityEntityType;entity_id:string;expected_version:number|null;payload_json:string}>('SELECT operation_id,entity_type,entity_id,expected_version,payload_json FROM durability_sync_outbox WHERE state=\'PENDING\' ORDER BY created_at');
+      return rows.map((row) => ({ operationId:row.operation_id, entityType:row.entity_type, entityId:row.entity_id, expectedVersion:row.expected_version, payload:JSON.parse(row.payload_json) as Record<string, unknown> }));
+    },
+    async applyRemote(record) { const db = await getActiveDatabase(); await db.withExclusiveTransactionAsync(async () => applyRemoteDurabilityRecord(db, record)); },
+    async markApplied(operationId, record) {
+      const db = await getActiveDatabase();
+      await db.withExclusiveTransactionAsync(async () => {
+        await applyRemoteDurabilityRecord(db, record, true);
+        await db.runAsync('DELETE FROM durability_sync_outbox WHERE operation_id=?', operationId);
+        await db.runAsync('UPDATE durability_sync_outbox SET expected_version=? WHERE entity_type=? AND entity_id=? AND state=\'PENDING\'', record.version, record.entityType, record.entityId);
+      });
+    },
+    async markConflict(operation, remote) {
+      const db = await getActiveDatabase();
+      await db.withExclusiveTransactionAsync(async () => {
+        await db.runAsync('UPDATE durability_sync_outbox SET state=\'CONFLICT\' WHERE operation_id=?', operation.operationId);
+        await db.runAsync('INSERT INTO durability_sync_conflicts(entity_type,entity_id,operation_id,local_payload_json,remote_record_json,detected_at) VALUES(?,?,?,?,?,?) ON CONFLICT(entity_type,entity_id) DO UPDATE SET operation_id=excluded.operation_id,local_payload_json=excluded.local_payload_json,remote_record_json=excluded.remote_record_json,detected_at=excluded.detected_at', operation.entityType, operation.entityId, operation.operationId, json(operation.payload), json(remote), new Date().toISOString());
+      });
+    },
+  };
+}
+
 export async function initializeDatabase(ownerUserId: string) {
   const db = await activateAccountDatabase(ownerUserId);
   await db.execAsync('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
@@ -293,28 +407,39 @@ export async function loadDocumentExport(quoteId:string):Promise<DocumentExportR
 export async function saveDocumentExport(record:DocumentExportRecord){ const db=await getActiveDatabase(); const now=new Date().toISOString(); await db.runAsync(`INSERT INTO document_exports (quote_id,renderer_version,file_uri,status,error_message,created_at,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(quote_id) DO UPDATE SET renderer_version=excluded.renderer_version,file_uri=excluded.file_uri,status=excluded.status,error_message=excluded.error_message,updated_at=excluded.updated_at`,record.quoteId,record.rendererVersion,record.fileUri,record.status,record.errorMessage,now,now); }
 
 export async function loadBusinessProfile() { return getBusinessProfile(await getActiveDatabase()); }
-export async function updateBusinessProfile(profile: BusinessProfile) { return saveBusinessProfile(await getActiveDatabase(), profile); }
+export async function updateBusinessProfile(profile: BusinessProfile) {
+  const db = await getActiveDatabase();
+  await saveBusinessProfile(db, profile);
+  await queueDurabilityEntity(db, 'BUSINESS_PROFILE', 'profile');
+  notifyDurabilityChange();
+}
 
 export async function listMeasurementUnits(): Promise<MeasurementUnit[]> {
   const db = await getActiveDatabase();
-  const rows = await db.getAllAsync<{code:string;label:string;is_custom:number}>('SELECT code, label, is_custom FROM measurement_units ORDER BY is_custom, created_at, label');
+  const rows = await db.getAllAsync<{code:string;label:string;is_custom:number}>('SELECT code, label, is_custom FROM measurement_units WHERE deleted_at IS NULL ORDER BY is_custom, created_at, label');
   return rows.map((r) => ({ code:r.code, label:r.label, isCustom:Boolean(r.is_custom) }));
 }
 export async function createMeasurementUnit(label: string): Promise<MeasurementUnit> {
   const clean = label.trim(); if (!clean) throw new Error('Inserisci il nome dell\'unita.');
   const unit = { code:newId('unit'), label:clean, isCustom:true }; const db = await getActiveDatabase();
-  await db.runAsync('INSERT INTO measurement_units (code, label, is_custom, created_at) VALUES (?, ?, 1, ?)', unit.code, unit.label, new Date().toISOString());
+  const now = new Date().toISOString();
+  await db.runAsync('INSERT INTO measurement_units (code, label, is_custom, created_at, updated_at) VALUES (?, ?, 1, ?, ?)', unit.code, unit.label, now, now);
+  await queueDurabilityEntity(db, 'MEASUREMENT_UNIT', unit.code);
+  notifyDurabilityChange();
   return unit;
 }
 export async function listVatRates(): Promise<VatRate[]> {
   const db = await getActiveDatabase();
-  const rows = await db.getAllAsync<{code:string;label:string;rate_basis_points:number;is_custom:number}>('SELECT code, label, rate_basis_points, is_custom FROM vat_rates ORDER BY is_custom, rate_basis_points');
+  const rows = await db.getAllAsync<{code:string;label:string;rate_basis_points:number;is_custom:number}>('SELECT code, label, rate_basis_points, is_custom FROM vat_rates WHERE deleted_at IS NULL ORDER BY is_custom, rate_basis_points');
   return rows.map((r) => ({ code:r.code, label:r.label, rateBasisPoints:r.rate_basis_points, isCustom:Boolean(r.is_custom) }));
 }
 export async function createVatRate(label:string, rateBasisPoints:number): Promise<VatRate> {
   if (!label.trim() || !Number.isSafeInteger(rateBasisPoints) || rateBasisPoints < 0 || rateBasisPoints > 100000) throw new Error('Aliquota personalizzata non valida.');
   const value={code:newId('vat'),label:label.trim(),rateBasisPoints,isCustom:true}; const db=await getActiveDatabase();
-  await db.runAsync('INSERT INTO vat_rates (code, label, rate_basis_points, is_custom, created_at) VALUES (?, ?, ?, 1, ?)',value.code,value.label,value.rateBasisPoints,new Date().toISOString());
+  const now = new Date().toISOString();
+  await db.runAsync('INSERT INTO vat_rates (code, label, rate_basis_points, is_custom, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)',value.code,value.label,value.rateBasisPoints,now,now);
+  await queueDurabilityEntity(db, 'VAT_RATE', value.code);
+  notifyDurabilityChange();
   return value;
 }
 
@@ -332,33 +457,37 @@ function mapCatalogItem(row:{id:string;title:string;price_mode:'measured'|'body'
 }
 export async function listCatalogItems(query = ''): Promise<CatalogItem[]> {
   const db=await getActiveDatabase(); const needle=`%${query.trim()}%`;
-  const rows=await db.getAllAsync<{id:string;title:string;price_mode:'measured'|'body';unit_code:string|null;unit_label:string;price_cents:number;created_at:string;updated_at:string}>('SELECT * FROM catalog_items WHERE title LIKE ? ORDER BY title COLLATE NOCASE',needle);
+  const rows=await db.getAllAsync<{id:string;title:string;price_mode:'measured'|'body';unit_code:string|null;unit_label:string;price_cents:number;created_at:string;updated_at:string}>('SELECT * FROM catalog_items WHERE deleted_at IS NULL AND title LIKE ? ORDER BY title COLLATE NOCASE',needle);
   return rows.map(mapCatalogItem);
 }
 export async function findCatalogItemByTitle(title:string): Promise<CatalogItem|null> {
   const db=await getActiveDatabase();
-  const row=await db.getFirstAsync<{id:string;title:string;price_mode:'measured'|'body';unit_code:string|null;unit_label:string;price_cents:number;created_at:string;updated_at:string}>('SELECT * FROM catalog_items WHERE title = ? COLLATE NOCASE LIMIT 1',title.trim());
+  const row=await db.getFirstAsync<{id:string;title:string;price_mode:'measured'|'body';unit_code:string|null;unit_label:string;price_cents:number;created_at:string;updated_at:string}>('SELECT * FROM catalog_items WHERE deleted_at IS NULL AND title = ? COLLATE NOCASE LIMIT 1',title.trim());
   return row?mapCatalogItem(row):null;
 }
 export async function saveCatalogItem(value: CatalogItemInput): Promise<CatalogItem> {
   const item=normalizeCatalogItem(value); const db=await getActiveDatabase();
-  await db.runAsync('INSERT INTO catalog_items (id,title,price_mode,unit_code,unit_label,price_cents,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,price_mode=excluded.price_mode,unit_code=excluded.unit_code,unit_label=excluded.unit_label,price_cents=excluded.price_cents,updated_at=excluded.updated_at',item.id,item.title,item.priceMode,item.unitCode,item.unitLabel,item.priceCents,item.createdAt,item.updatedAt);
+  await db.runAsync('INSERT INTO catalog_items (id,title,price_mode,unit_code,unit_label,price_cents,created_at,updated_at,deleted_at) VALUES (?,?,?,?,?,?,?,?,NULL) ON CONFLICT(id) DO UPDATE SET title=excluded.title,price_mode=excluded.price_mode,unit_code=excluded.unit_code,unit_label=excluded.unit_label,price_cents=excluded.price_cents,updated_at=excluded.updated_at,deleted_at=NULL',item.id,item.title,item.priceMode,item.unitCode,item.unitLabel,item.priceCents,item.createdAt,item.updatedAt);
+  await queueDurabilityEntity(db, 'CATALOG_ITEM', item.id);
+  notifyDurabilityChange();
   return item;
 }
-export async function deleteCatalogItem(id:string) { const db=await getActiveDatabase(); await db.runAsync('DELETE FROM catalog_items WHERE id = ?',id); }
+export async function deleteCatalogItem(id:string) { const db=await getActiveDatabase(); const now = new Date().toISOString(); await db.runAsync('UPDATE catalog_items SET deleted_at=?,updated_at=? WHERE id = ?',now,now,id); await queueDurabilityEntity(db, 'CATALOG_ITEM', id); notifyDurabilityChange(); }
 
 export async function listClients(query = ''): Promise<Client[]> {
   const db=await getActiveDatabase(); const needle=`%${query.trim()}%`;
-  const rows=await db.getAllAsync<{id:string;name:string;contact_name:string;phone:string;email:string;address:string;tax_id:string;vat_number:string;created_at:string;updated_at:string}>('SELECT * FROM clients WHERE name LIKE ? OR contact_name LIKE ? ORDER BY name COLLATE NOCASE LIMIT 20',needle,needle);
+  const rows=await db.getAllAsync<{id:string;name:string;contact_name:string;phone:string;email:string;address:string;tax_id:string;vat_number:string;created_at:string;updated_at:string}>('SELECT * FROM clients WHERE deleted_at IS NULL AND (name LIKE ? OR contact_name LIKE ?) ORDER BY name COLLATE NOCASE LIMIT 20',needle,needle);
   return rows.map((r)=>({id:r.id,name:r.name,contactName:r.contact_name,phone:r.phone,email:r.email,address:r.address,taxId:r.tax_id,vatNumber:r.vat_number,createdAt:r.created_at,updatedAt:r.updated_at}));
 }
 export async function saveClient(value: Omit<Client,'id'|'createdAt'|'updatedAt'> & {id?:string}): Promise<Client> {
   const name=value.name.trim(); if(!name) throw new Error('Inserisci il nome o la ragione sociale del cliente.');
   const now=new Date().toISOString(); const client:Client={id:value.id??newId('client'),name,contactName:value.contactName.trim(),phone:value.phone.trim(),email:value.email.trim(),address:value.address.trim(),taxId:value.taxId.trim(),vatNumber:value.vatNumber.trim(),createdAt:now,updatedAt:now}; const db=await getActiveDatabase();
-  await db.runAsync('INSERT INTO clients (id,name,contact_name,phone,email,address,tax_id,vat_number,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,contact_name=excluded.contact_name,phone=excluded.phone,email=excluded.email,address=excluded.address,tax_id=excluded.tax_id,vat_number=excluded.vat_number,updated_at=excluded.updated_at',client.id,client.name,client.contactName,client.phone,client.email,client.address,client.taxId,client.vatNumber,now,now);
+  await db.runAsync('INSERT INTO clients (id,name,contact_name,phone,email,address,tax_id,vat_number,created_at,updated_at,deleted_at) VALUES (?,?,?,?,?,?,?,?,?,?,NULL) ON CONFLICT(id) DO UPDATE SET name=excluded.name,contact_name=excluded.contact_name,phone=excluded.phone,email=excluded.email,address=excluded.address,tax_id=excluded.tax_id,vat_number=excluded.vat_number,updated_at=excluded.updated_at,deleted_at=NULL',client.id,client.name,client.contactName,client.phone,client.email,client.address,client.taxId,client.vatNumber,now,now);
+  await queueDurabilityEntity(db, 'CLIENT', client.id);
+  notifyDurabilityChange();
   return client;
 }
-export async function deleteClient(id:string) { const db=await getActiveDatabase(); await db.runAsync('DELETE FROM clients WHERE id = ?',id); }
+export async function deleteClient(id:string) { const db=await getActiveDatabase(); const now = new Date().toISOString(); await db.runAsync('UPDATE clients SET deleted_at=?,updated_at=? WHERE id = ?',now,now,id); await queueDurabilityEntity(db, 'CLIENT', id); notifyDurabilityChange(); }
 
 export async function deleteDraft(id: string) {
   const db = await getActiveDatabase();

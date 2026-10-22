@@ -3,7 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CatalogItem, Client, closeAccountDatabase, createDraft, createMeasurementUnit, createVatRate, deleteDraft, finalizeDraft, findCatalogItemByTitle, initializeDatabase, listCatalogItems, listClients, listMeasurementUnits, listQuotes, listRecentWorkItems, listVatRates, loadBusinessProfile, loadDocumentExport, loadDraftBusinessSnapshot, loadIssuedSnapshot, loadQuoteShareLinkCache, MeasurementUnit, saveCatalogItem, saveClient, saveDraft, saveQuoteShareLinkCache, updateBusinessProfile, VatRate } from '../database';
+import { CatalogItem, Client, closeAccountDatabase, createDraft, createMeasurementUnit, createVatRate, deleteDraft, durabilityLocalRepository, finalizeDraft, findCatalogItemByTitle, initializeDatabase, listCatalogItems, listClients, listMeasurementUnits, listQuotes, listRecentWorkItems, listVatRates, loadBusinessProfile, loadDocumentExport, loadDraftBusinessSnapshot, loadIssuedSnapshot, loadQuoteShareLinkCache, MeasurementUnit, saveCatalogItem, saveClient, saveDraft, saveQuoteShareLinkCache, subscribeDurabilityChanges, updateBusinessProfile, VatRate } from '../database';
 import { BusinessProfile, choosePersistentLogo, deleteManagedLogo } from '../businessProfile';
 import { formatQuoteNumber } from '../emissionClock';
 import { calculateEconomics, createEmptyQuoteItem, formatMoney, globalDiscountInputKey, hasMeaningfulDraftContent, itemTotalCents, materializeNumericInputs, newId, numericInputKey, NumericInputDrafts, parseMoneyCents, parsePercentBasisPoints, Quote, quoteTotalCents, revisionHistoryForQuote, tryParseDecimal } from '../domain';
@@ -62,11 +62,14 @@ import { LocalJobInputsCacheRepository } from '../features/jobs/LocalJobInputsCa
 import { QuoteEditorScreen } from '../features/quote-editor/QuoteEditorScreen';
 import { QuoteNumberingScreen } from '../features/quote-numbering/QuoteNumberingScreen';
 import { BusinessProfileEditor } from '../features/business-profile/BusinessProfileEditor';
+import { DurabilitySyncService } from '../features/durability/DurabilitySyncService';
+import { SupabaseDurabilityRepository } from '../features/durability/SupabaseDurabilityRepository';
 const quoteIssuanceRepository = new SupabaseQuoteIssuanceRepository();
 const issuanceSnapshotRepository = new SupabaseIssuanceSnapshotRepository();
 const quoteSharingRepository = new SupabaseQuoteSharingRepository();
 const jobApplicationService = new JobApplicationService(new SupabaseJobRepository({ rpc: async (functionName, arguments_) => supabase.rpc(functionName, arguments_) }), undefined, undefined, new LocalJobIssuanceSnapshotRecovery(issuanceSnapshotRepository));
 const jobInputsApplicationService = new JobInputsApplicationService(new SupabaseJobInputsRepository({ rpc: async (functionName, arguments_) => supabase.rpc(functionName, arguments_) }), new LocalJobInputsCacheRepository());
+const durabilitySyncService = new DurabilitySyncService(durabilityLocalRepository(), new SupabaseDurabilityRepository());
 type Screen = 'home' | 'archive' | 'clients' | 'catalog' | 'jobs' | 'job-detail' | 'settings' | 'numbering' | 'business-profile' | 'editor';
 export function AppNavigator({ ownerUserId }: { ownerUserId: string }) {
   const {theme,preference,ready,setPreference}=useTheme(); styles=createStyles(theme);
@@ -84,6 +87,10 @@ export function AppNavigator({ ownerUserId }: { ownerUserId: string }) {
   const [loadError, setLoadError] = useState<Error | null>(null);
   const [legacyClaimAvailability, setLegacyClaimAvailability] = useState<LegacyDataClaimAvailability>('unavailable');
   const [claimingLegacyData, setClaimingLegacyData] = useState(false);
+  const syncDurability = useCallback(async () => {
+    try { await durabilitySyncService.sync(); }
+    catch (error) { console.info('QUOTIVO_DURABILITY_SYNC_PENDING', error instanceof Error ? error.message : 'UNKNOWN'); }
+  }, []);
   const refresh = useCallback(async () => {
     const nextQuotes = await listQuotes();
     const cachedOutcomes = await Promise.all(nextQuotes.map(async (quote) => {
@@ -98,13 +105,15 @@ export function AppNavigator({ ownerUserId }: { ownerUserId: string }) {
   useEffect(() => {
     let active = true;
     initializeDatabase(ownerUserId)
+      .then(syncDurability)
       .then(refresh)
       .then(() => inspectLegacyDataClaim(ownerUserId))
       .then((availability) => { if (active) setLegacyClaimAvailability(availability); })
       .catch((error) => { setLoadError(error instanceof Error ? error : new Error('Archivio locale non disponibile.')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [ownerUserId, refresh]);
+  }, [ownerUserId, refresh, syncDurability]);
+  useEffect(() => subscribeDurabilityChanges(() => { void syncDurability(); }), [syncDurability]);
   useEffect(() => {
     requestAnimationFrame(() => rootScrollRef.current?.scrollTo({ y: 0, animated: false }));
   }, [initialArchiveFilter, screen]);
