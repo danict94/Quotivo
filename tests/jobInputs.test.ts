@@ -21,6 +21,13 @@ test('proiezione Job centralizza costi e minuti senza introdurre margini', () =>
   assert.equal(result.totalManHours, 11.5);
 });
 
+test('un costo associato al tempo è incluso una sola volta nei costi effettivi', () => {
+  const result = projectJobWorkInputs([cost()], [{ ...work(), costCents: 4_500 }]);
+  assert.equal(result.totalWorkEntryCosts, 4_500);
+  assert.equal(result.totalActualCosts, 16_500);
+  assert.equal(result.costsByCategory.MATERIALS, 12_000);
+});
+
 test('service salva solo la risposta remota e usa cache in sola lettura offline', async () => {
   const storedCosts = new Map<string, JobCostEntry>(); const storedWork = new Map<string, JobWorkEntry>();
   const cache: JobInputsCacheRepository = { list: async () => ({ costs: [...storedCosts.values()], workEntries: [...storedWork.values()] }), saveCost: async (entry) => { storedCosts.set(entry.id, entry); }, removeCost: async (id) => { storedCosts.delete(id); }, saveWork: async (entry) => { storedWork.set(entry.id, entry); }, removeWork: async (id) => { storedWork.delete(id); } };

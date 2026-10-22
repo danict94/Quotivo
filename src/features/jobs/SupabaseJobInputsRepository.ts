@@ -1,8 +1,8 @@
-import { JobCostCategory, JobCostDraft, JobCostEntry, JobInputs, JobInputsRemoteRepository, JobWorkDraft, JobWorkEntry, JobWorkRole } from './JobInputsRepository';
+import { jobCostCategories, JobCostCategory, JobCostDraft, JobCostEntry, JobInputs, JobInputsRemoteRepository, JobWorkDraft, JobWorkEntry, JobWorkRole } from './JobInputsRepository';
 
 type Row = Record<string, unknown>;
 export interface JobInputsRpcClient { rpc(name: string, args: Record<string, unknown>): Promise<Readonly<{ data: unknown; error: Readonly<{ message: string }> | null }>>; }
-const categories = new Set<JobCostCategory>(['MATERIALS', 'WORKER', 'SUBCONTRACTOR', 'FUEL', 'TOLLS_PARKING', 'RENTAL', 'DISPOSAL', 'EQUIPMENT', 'OTHER']);
+const categories = new Set<JobCostCategory>(jobCostCategories);
 const roles = new Set<JobWorkRole>(['OWNER', 'WORKER', 'COLLABORATOR']);
 const rows = (value: unknown) => Array.isArray(value) ? value as Row[] : [];
 function cost(row: Row): JobCostEntry {

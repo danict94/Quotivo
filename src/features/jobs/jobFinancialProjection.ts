@@ -2,6 +2,7 @@ import { JobCostCategory, JobCostEntry, JobWorkEntry } from './JobInputsReposito
 
 export type JobWorkMetrics = Readonly<{
   totalActualCosts: number;
+  totalWorkEntryCosts: number;
   costsByCategory: Readonly<Record<JobCostCategory, number>>;
   totalWorkMinutes: number;
   ownerWorkMinutes: number;
@@ -16,5 +17,7 @@ export function projectJobWorkInputs(costs: readonly JobCostEntry[], workEntries
   const totalWorkMinutes = workEntries.reduce((total, entry) => total + entry.durationMinutes, 0);
   const ownerWorkMinutes = workEntries.filter((entry) => entry.role === 'OWNER').reduce((total, entry) => total + entry.durationMinutes, 0);
   const workerWorkMinutes = workEntries.filter((entry) => entry.role !== 'OWNER').reduce((total, entry) => total + entry.durationMinutes, 0);
-  return { totalActualCosts: costs.reduce((total, entry) => total + entry.amountCents, 0), costsByCategory, totalWorkMinutes, ownerWorkMinutes, workerWorkMinutes, totalManHours: totalWorkMinutes / 60 };
+  const totalCostEntries = costs.reduce((total, entry) => total + entry.amountCents, 0);
+  const totalWorkEntryCosts = workEntries.reduce((total, entry) => total + (entry.costCents ?? 0), 0);
+  return { totalActualCosts: totalCostEntries + totalWorkEntryCosts, totalWorkEntryCosts, costsByCategory, totalWorkMinutes, ownerWorkMinutes, workerWorkMinutes, totalManHours: totalWorkMinutes / 60 };
 }

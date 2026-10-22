@@ -1,5 +1,8 @@
 export const jobCostCategories = ['MATERIALS', 'WORKER', 'SUBCONTRACTOR', 'FUEL', 'TOLLS_PARKING', 'RENTAL', 'DISPOSAL', 'EQUIPMENT', 'OTHER'] as const;
 export type JobCostCategory = (typeof jobCostCategories)[number];
+/** `WORKER` is retained only to read historic remote/cache projections. */
+export const jobCostWriteCategories = ['MATERIALS', 'SUBCONTRACTOR', 'FUEL', 'TOLLS_PARKING', 'RENTAL', 'DISPOSAL', 'EQUIPMENT', 'OTHER'] as const;
+export type JobCostWriteCategory = (typeof jobCostWriteCategories)[number];
 export const jobWorkRoles = ['OWNER', 'WORKER', 'COLLABORATOR'] as const;
 export type JobWorkRole = (typeof jobWorkRoles)[number];
 
@@ -14,7 +17,7 @@ export type JobWorkEntry = Readonly<{
   note: string | null; createdAt: string; updatedAt: string;
 }>;
 
-export type JobCostDraft = Readonly<{ requestKey: string; category: JobCostCategory; description: string; amountCents: number; occurredAt: string; workerLabel: string | null }>;
+export type JobCostDraft = Readonly<{ requestKey: string; category: JobCostWriteCategory; description: string; amountCents: number; occurredAt: string; workerLabel: string | null }>;
 export type JobWorkDraft = Readonly<{ requestKey: string; personLabel: string; role: JobWorkRole; workDate: string; durationMinutes: number; costCents: number | null; note: string | null }>;
 export type JobInputs = Readonly<{ costs: readonly JobCostEntry[]; workEntries: readonly JobWorkEntry[] }>;
 
