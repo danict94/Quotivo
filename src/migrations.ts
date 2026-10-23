@@ -1,3 +1,4 @@
+import { qf42FileDurabilitySql, qf42OperationalRestoreSql } from './qf42LocalMigrationSql';
 export type Migration = { version: number; sql: string };
 
 export const migrations: Migration[] = [
@@ -542,23 +543,8 @@ export const migrations: Migration[] = [
       detected_at TEXT NOT NULL
     );
   ` },
-  { version: 23, sql: `
-    -- QF-042C: remote operational records are restored into these local-only
-    -- projections. Share tokens are intentionally never persisted here.
-    CREATE TABLE quote_share_restore_cache (
-      share_id TEXT PRIMARY KEY NOT NULL,
-      issuance_id TEXT NOT NULL,
-      lifecycle TEXT NOT NULL CHECK (lifecycle IN ('ACTIVE','SUPERSEDED','REVOKED')),
-      opened_at TEXT,
-      created_at TEXT NOT NULL
-    );
-    CREATE INDEX quote_share_restore_cache_issuance ON quote_share_restore_cache(issuance_id, created_at DESC);
-    CREATE TABLE operational_restore_issues (
-      kind TEXT NOT NULL CHECK (kind = 'ISSUANCE_MISSING_SNAPSHOT'),
-      issuance_id TEXT PRIMARY KEY NOT NULL,
-      detected_at TEXT NOT NULL
-    );
-  ` },
+  { version: 23, sql: qf42OperationalRestoreSql },
+  { version: 24, sql: qf42FileDurabilitySql },
 ];
 
 export interface MigrationDatabase {

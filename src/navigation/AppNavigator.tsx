@@ -68,6 +68,7 @@ import { QuoteDurabilitySyncService } from '../features/quote-durability/QuoteDu
 import { SupabaseQuoteDurabilityRepository } from '../features/quote-durability/SupabaseQuoteDurabilityRepository';
 import { OperationalRestoreSyncService } from '../features/operational-restore/OperationalRestoreSyncService';
 import { SupabaseOperationalRestoreRepository } from '../features/operational-restore/SupabaseOperationalRestoreRepository';
+import { syncRemoteFiles } from '../features/file-durability/fileDurabilityRuntime';
 const quoteIssuanceRepository = new SupabaseQuoteIssuanceRepository();
 const issuanceSnapshotRepository = new SupabaseIssuanceSnapshotRepository();
 const quoteSharingRepository = new SupabaseQuoteSharingRepository();
@@ -94,7 +95,7 @@ export function AppNavigator({ ownerUserId }: { ownerUserId: string }) {
   const [legacyClaimAvailability, setLegacyClaimAvailability] = useState<LegacyDataClaimAvailability>('unavailable');
   const [claimingLegacyData, setClaimingLegacyData] = useState(false);
   const syncDurability = useCallback(async () => {
-    try { await durabilitySyncService.sync(); await quoteDurabilitySyncService.sync(); await operationalRestoreSyncService.sync(); }
+    try { await durabilitySyncService.sync(); await quoteDurabilitySyncService.sync(); await operationalRestoreSyncService.sync(); await syncRemoteFiles(); }
     catch (error) { console.info('QUOTIVO_DURABILITY_SYNC_PENDING', error instanceof Error ? error.message : 'UNKNOWN'); }
   }, []);
   const refresh = useCallback(async () => {
