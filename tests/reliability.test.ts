@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import initSqlJs, { Database } from 'sql.js';
+import initSqlJs from 'sql.js';
 import { Packer } from 'docx';
 import JSZip from 'jszip';
 import { calculateEconomics, createEmptyQuoteItem, hasMeaningfulDraftContent, materializeNumericInputs, numericInputKey, parseDecimal, parseScaledDecimal, Quote } from '../src/domain';
 import { migrations, runMigrations } from '../src/migrations';
 import { assertDraftDeletable, DraftDeletionIntegrityError } from '../src/features/quotes/draftDeletionIntegrity';
-import { BindValue, finalizeQuoteData, QuoteTransaction, replaceDraftData } from '../src/quoteTransactions';
+import { finalizeQuoteData, replaceDraftData } from '../src/quoteTransactions';
 import { validateLogoBytes } from '../src/logoValidation';
 import { addCalendarDays, EmissionClock, formatQuoteNumber } from '../src/emissionClock';
 import { importLogoAsset, LogoImportGateway, runStagingStrategies } from '../src/logoImport';
@@ -15,22 +15,7 @@ import { A4_POINTS, paginateWorkItems, renderStandardHtml } from '../src/documen
 import { draftPdfName, finalPdfName, safeFilePart } from '../src/documents/pdfNaming';
 import { generatePdfForIssuedQuote } from '../src/documents/documentWorkflow';
 import { createDocxDocument } from '../src/documents/docxDocument';
-
-class SqlJsAdapter implements QuoteTransaction {
-  constructor(readonly db: Database) {}
-  async execAsync(sql: string) { this.db.run(sql); }
-  async runAsync(sql: string, ...params: BindValue[]) {
-    this.db.run(sql, params);
-    return { changes: this.db.getRowsModified() };
-  }
-  async getFirstAsync<T>(sql: string, ...params: BindValue[]) {
-    const statement = this.db.prepare(sql);
-    try {
-      statement.bind(params);
-      return statement.step() ? statement.getAsObject() as T : null;
-    } finally { statement.free(); }
-  }
-}
+import { SqlJsTestAdapter } from './sqliteTestAdapter';
 
 const sqlPromise = initSqlJs();
 const now = '2026-09-11T12:00:00.000Z';
@@ -48,18 +33,18 @@ function quote(id = 'q-1'): Quote {
 
 async function migratedDatabase() {
   const SQL = await sqlPromise;
-  const adapter = new SqlJsAdapter(new SQL.Database());
+  const adapter = new SqlJsTestAdapter(new SQL.Database());
   await adapter.execAsync('PRAGMA foreign_keys = ON');
   await runMigrations(adapter);
   return adapter;
 }
 
-async function insertDraft(adapter: SqlJsAdapter, value: Quote) {
+async function insertDraft(adapter: SqlJsTestAdapter, value: Quote) {
   await adapter.runAsync('INSERT INTO quotes (id, client, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', value.id, 'Vecchio cliente', 'Vecchio titolo', now, now);
   await adapter.runAsync('INSERT INTO quote_items (id, quote_id, description, quantity, unit, unit_price_cents, position) VALUES (?, ?, ?, ?, ?, ?, ?)', `${value.id}-old`, value.id, 'Vecchia voce', 1, 'pz', 100, 0);
 }
 
-async function atomicFinalize(adapter: SqlJsAdapter, value: Quote) {
+async function atomicFinalize(adapter: SqlJsTestAdapter, value: Quote) {
   await adapter.execAsync('BEGIN IMMEDIATE');
   try {
     const number = await finalizeQuoteData(adapter, value, finalizationContext);
@@ -186,7 +171,7 @@ test('Staging Android riporta tutti gli errori quando nessun percorso è leggibi
 
 test('Migrazione annuale conserva dati legacy senza attribuire un anno non attendibile', async () => {
   const SQL = await sqlPromise;
-  const adapter = new SqlJsAdapter(new SQL.Database());
+  const adapter = new SqlJsTestAdapter(new SQL.Database());
   await adapter.execAsync(`
     PRAGMA foreign_keys = ON;
     CREATE TABLE quotes (id TEXT PRIMARY KEY NOT NULL, number INTEGER UNIQUE, client TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, issued_at TEXT);

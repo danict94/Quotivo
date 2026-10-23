@@ -1,30 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import initSqlJs, { Database } from 'sql.js';
+import initSqlJs from 'sql.js';
 
 import { runMigrations } from '../src/migrations';
 import { LegacyDataIntegrityError, readLegacyDataSnapshot, transferLegacyData, verifyLegacyDataTransfer, verifyLegacyTargetIntegrity } from '../src/features/local-data/legacyClaimTransfer';
 import { repairSingleLegacyIssuedDraft } from '../src/features/local-data/repairLegacyIssuedDraft';
-
-class SqlAdapter {
-  constructor(readonly db: Database) {}
-  async execAsync(sql: string) { this.db.run(sql); }
-  async runAsync(sql: string, ...params: (string | number | null | Uint8Array)[]) { this.db.run(sql, params); return { changes: this.db.getRowsModified() }; }
-  async getAllAsync<T>(sql: string, ...params: (string | number | null | Uint8Array)[]) {
-    const statement = this.db.prepare(sql);
-    try { statement.bind(params); const rows: T[] = []; while (statement.step()) rows.push(statement.getAsObject() as T); return rows; } finally { statement.free(); }
-  }
-  async getFirstAsync<T>(sql: string, ...params: (string | number | null | Uint8Array)[]) {
-    const statement = this.db.prepare(sql);
-    try { statement.bind(params); return statement.step() ? statement.getAsObject() as T : null; } finally { statement.free(); }
-  }
-}
+import { SqlJsTestAdapter } from './sqliteTestAdapter';
 
 const SQL = initSqlJs();
 
 async function database() {
   const engine = await SQL;
-  const adapter = new SqlAdapter(new engine.Database());
+  const adapter = new SqlJsTestAdapter(new engine.Database());
   await adapter.execAsync('PRAGMA foreign_keys = ON');
   await runMigrations(adapter);
   return adapter;

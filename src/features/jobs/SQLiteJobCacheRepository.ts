@@ -1,8 +1,7 @@
 import { Job, JobCacheRepository, JobProjectionRepository, JobStatus } from './JobRepository';
+import { SQLiteQueryDatabase } from '../../data/local/SQLiteQueryDatabase';
 
-type Database = {
-  getFirstAsync<T>(sql: string, ...params: string[]): Promise<T | null>;
-  getAllAsync<T>(sql: string, ...params: string[]): Promise<T[]>;
+type Database = SQLiteQueryDatabase & {
   runAsync(sql: string, ...params: (string | number | null)[]): Promise<unknown>;
 };
 

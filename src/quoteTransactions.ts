@@ -2,7 +2,7 @@ import { calculateEconomics, Quote, validateDraftForFinalization } from './domai
 import { EmissionClock } from './emissionClock';
 import { STANDARD_RENDERER_VERSION } from './documents/documentModel';
 
-export type BindValue = string | number | null;
+type BindValue = string | number | null;
 export interface QuoteTransaction {
   runAsync(sql: string, ...params: BindValue[]): Promise<{ changes: number }>;
   getFirstAsync<T>(sql: string, ...params: BindValue[]): Promise<T | null>;

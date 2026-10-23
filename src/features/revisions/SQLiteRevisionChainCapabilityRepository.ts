@@ -1,9 +1,5 @@
 import { RevisionChainCapability, RevisionChainQuote, resolveRevisionChainCapability } from './revisionChainCapability';
-
-type Database = {
-  getFirstAsync<T>(sql: string, ...params: string[]): Promise<T | null>;
-  getAllAsync<T>(sql: string, ...params: string[]): Promise<T[]>;
-};
+import { SQLiteQueryDatabase as Database } from '../../data/local/SQLiteQueryDatabase';
 
 type QuoteRow = {
   id: string;
