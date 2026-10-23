@@ -14,15 +14,13 @@ import { SQLiteRevisionChainCapabilityRepository } from './features/revisions/SQ
 import { deriveRecentWorkItems, RecentWorkItem } from './features/recent-work-items/recentWorkItems';
 import { repairSingleLegacyIssuedDraft } from './features/local-data/repairLegacyIssuedDraft';
 import { reconcileVerifiedLegacyIssuedQuote } from './features/quote-issuance/reconcileIssuedQuoteBootstrap';
-import { Job } from './features/jobs/JobRepository';
-import { SQLiteJobCacheRepository } from './features/jobs/SQLiteJobCacheRepository';
-import { SQLiteJobInputsCacheRepository } from './features/jobs/SQLiteJobInputsCacheRepository';
+import { Job } from './features/jobs/JobRepository'; import { SQLiteJobCacheRepository } from './features/jobs/SQLiteJobCacheRepository'; import { SQLiteJobInputsCacheRepository } from './features/jobs/SQLiteJobInputsCacheRepository';
+import { SQLiteOperationalRestoreRepository } from './features/operational-restore/SQLiteOperationalRestoreRepository'; import { OperationalRestoreLocalRepository } from './features/operational-restore/OperationalRestoreContracts';
 import { JobCostEntry, JobInputs, JobWorkEntry } from './features/jobs/JobInputsRepository';
 import { DurabilityEntityRecord, DurabilityEntityType, DurabilityLocalRepository, DurabilityOutboxOperation } from './features/durability/DurabilityContracts';
-
+import { IssuedQuoteRestoreRecord, QuoteDraftRemoteRecord, QuoteDurabilityLocalRepository, QuoteDurabilityOutboxOperation } from './features/quote-durability/QuoteDurabilityContracts';
 const localDatabaseScope = createAccountDatabaseScope((databaseName) => SQLite.openDatabaseAsync(databaseName));
-function getActiveDatabase() { return localDatabaseScope.current(); }
-let activeAccountOwnerId: string | null = null;
+function getActiveDatabase() { return localDatabaseScope.current(); } let activeAccountOwnerId: string | null = null;
 async function activateAccountDatabase(ownerUserId: string) {
   if (activeAccountOwnerId && activeAccountOwnerId !== ownerUserId) await closeAccountDatabase();
   const db = await localDatabaseScope.activate(ownerUserId);
@@ -30,9 +28,7 @@ async function activateAccountDatabase(ownerUserId: string) {
   return db;
 }
 const localMetadataDatabaseName = 'quotivo-local-account-metadata-v1.db';
-
 export type { LegacyDataClaimAvailability } from './features/local-data/legacyClaimPolicy';
-
 type LocalDataSummary = {
   businessProfile: number;
   clients: number;
@@ -43,22 +39,18 @@ type LocalDataSummary = {
   shareCache: number;
   numbering: number;
 };
-
 function databaseFileUri(databaseName: string) {
   const directory = String(SQLite.defaultDatabaseDirectory).replace(/\\/g, '/').replace(/\/$/, '');
   return directory.startsWith('file:') ? `${directory}/${databaseName}` : `file://${directory}/${databaseName}`;
 }
-
 async function tableExists(db: SQLite.SQLiteDatabase, tableName: string) {
   return Boolean(await db.getFirstAsync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", tableName));
 }
-
 async function tableCount(db: SQLite.SQLiteDatabase, tableName: string, where = '') {
   if (!(await tableExists(db, tableName))) return 0;
   const row = await db.getFirstAsync<{ count: number }>(`SELECT COUNT(*) AS count FROM ${tableName}${where}`);
   return row?.count ?? 0;
 }
-
 async function summarizeAccountData(db: SQLite.SQLiteDatabase): Promise<LocalDataSummary> {
   const businessProfile = await tableCount(db, 'business_profiles', " WHERE trim(business_name) <> '' OR trim(tax_id) <> '' OR trim(vat_number) <> '' OR trim(address) <> '' OR trim(email) <> '' OR trim(phone) <> '' OR logo_uri IS NOT NULL");
   const numbering = await tableCount(db, 'number_sequences', " WHERE name = 'quotes' AND next_number > 1");
@@ -73,22 +65,18 @@ async function summarizeAccountData(db: SQLite.SQLiteDatabase): Promise<LocalDat
     numbering,
   };
 }
-
 function hasAccountData(summary: LocalDataSummary) {
   return Object.values(summary).some((count) => count > 0);
 }
-
 async function metadataDatabase() {
   const db = await SQLite.openDatabaseAsync(localMetadataDatabaseName);
   await db.execAsync("CREATE TABLE IF NOT EXISTS legacy_data_claim (id INTEGER PRIMARY KEY CHECK (id = 1), owner_user_id TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('claiming', 'claimed')), claimed_at TEXT NOT NULL)");
   return db;
 }
-
 async function existingLegacyClaim() {
   const db = await metadataDatabase();
   return db.getFirstAsync<{ owner_user_id: string; status: 'claiming' | 'claimed' }>('SELECT owner_user_id, status FROM legacy_data_claim WHERE id = 1');
 }
-
 async function openLegacyDatabase() {
   if (!new File(databaseFileUri(legacyDatabaseName)).exists) return null;
   const legacy = await SQLite.openDatabaseAsync(legacyDatabaseName);
@@ -96,7 +84,6 @@ async function openLegacyDatabase() {
   await runMigrations(legacy);
   return legacy;
 }
-
 export async function getLegacyDataClaimAvailability(ownerUserId: string): Promise<LegacyDataClaimAvailability> {
   const existingClaim = await existingLegacyClaim();
   const target = await activateAccountDatabase(ownerUserId);
@@ -111,7 +98,6 @@ export async function getLegacyDataClaimAvailability(ownerUserId: string): Promi
     await legacy.closeAsync();
   }
 }
-
 export async function claimLegacyData(ownerUserId: string) {
   const existingClaim = await existingLegacyClaim();
   if (existingClaim && existingClaim.owner_user_id !== ownerUserId) throw new Error('I dati locali sono già associati a un altro account su questo dispositivo.');
@@ -141,7 +127,6 @@ export async function claimLegacyData(ownerUserId: string) {
     await legacy.closeAsync();
   }
 }
-
 type QuoteRow = Omit<Quote, 'items' | 'status' | 'createdAt' | 'updatedAt' | 'issuedAt' | 'numberYear' | 'issuedLocalDate' | 'issuedOffsetMinutes' | 'validUntil'> & {
   status: 'draft' | 'issued'; created_at: string; updated_at: string; issued_at: string | null;
   number_year: number | null; issued_local_date: string | null; issued_offset_minutes: number | null; valid_until: string | null;
@@ -307,6 +292,107 @@ function hydrate(row: QuoteRow, items: ItemRow[]): Quote {
   };
 }
 
+type QuoteDurabilityRow = { quoteId:string; deleted:boolean; quote:Quote };
+function quoteDurabilityPayload(quote: Quote, deleted = false) { return { ...quote, deleted }; }
+function remoteQuoteRecord(value: IssuedQuoteRestoreRecord['snapshot']): Quote {
+  const raw = value as Partial<Quote>;
+  if (raw.status !== 'issued' || typeof raw.id !== 'string' || typeof raw.number !== 'number' || typeof raw.numberYear !== 'number'
+    || typeof raw.revisionNumber !== 'number' || !Array.isArray(raw.items) || typeof raw.client !== 'string' || typeof raw.title !== 'string'
+    || typeof raw.createdAt !== 'string' || typeof raw.updatedAt !== 'string' || typeof raw.issuedAt !== 'string') throw new Error('QUOTE_RESTORE_SNAPSHOT_INVALID');
+  return raw as Quote;
+}
+async function quoteById(db: SQLite.SQLiteDatabase, quoteId: string): Promise<Quote | null> {
+  const row = await db.getFirstAsync<QuoteRow>('SELECT * FROM quotes WHERE id=?', quoteId);
+  if (!row) return null;
+  return hydrate(row, await db.getAllAsync<ItemRow>('SELECT * FROM quote_items WHERE quote_id=? ORDER BY position', quoteId));
+}
+async function localDraftDurabilityRow(db: SQLite.SQLiteDatabase, quoteId: string): Promise<QuoteDurabilityRow | null> {
+  const quote = await quoteById(db, quoteId);
+  return quote?.status === 'draft' ? { quoteId, deleted:false, quote } : null;
+}
+async function queueQuoteDurabilityPayload(db: SQLite.SQLiteDatabase, quote: Quote, deleted: boolean) {
+  const state = await db.getFirstAsync<{remote_version:number}>('SELECT remote_version FROM quote_durability_state WHERE quote_id=?', quote.id);
+  // Coalesce queued editor autosaves. A request already in flight is protected by
+  // its server operation id and any divergence remains an explicit conflict.
+  await db.runAsync("DELETE FROM quote_durability_outbox WHERE quote_id=? AND state='PENDING'", quote.id);
+  await db.runAsync('INSERT INTO quote_durability_outbox(operation_id,quote_id,expected_version,payload_json,state,created_at) VALUES(?,?,?,?,?,?)', newId('quote-sync'), quote.id, state?.remote_version ?? null, json(quoteDurabilityPayload(quote, deleted)), 'PENDING', new Date().toISOString());
+}
+async function insertRestoredQuote(txn: SQLite.SQLiteDatabase, quote: Quote) {
+  const existing = await txn.getFirstAsync<{status:'draft'|'issued'}>('SELECT status FROM quotes WHERE id=?', quote.id);
+  if (existing?.status === 'issued') return;
+  if (existing?.status === 'draft') {
+    const pending = await txn.getFirstAsync<{operation_id:string}>('SELECT operation_id FROM quote_durability_outbox WHERE quote_id=? AND state=\'PENDING\'', quote.id);
+    if (pending) throw new Error('QUOTE_RESTORE_CONFLICT_LOCAL_DRAFT');
+    await txn.runAsync('DELETE FROM quotes WHERE id=?', quote.id);
+  }
+  await txn.runAsync(`INSERT INTO quotes (id,number,number_year,client,title,status,created_at,updated_at,issued_at,issued_local_date,issued_offset_minutes,valid_until,introduction,global_discount_basis_points,client_address,site_address,client_id,default_vat_basis_points,client_contact_name,client_phone,client_email,client_tax_id,client_vat_number,revision_root_quote_id,parent_quote_id,revision_number) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, quote.id, quote.number, quote.numberYear, quote.client, quote.title, 'issued', quote.createdAt, quote.updatedAt, quote.issuedAt, quote.issuedLocalDate, quote.issuedOffsetMinutes, quote.validUntil, quote.introduction, quote.globalDiscountBasisPoints, quote.clientAddress, quote.siteAddress, quote.clientId, quote.defaultVatBasisPoints, quote.clientContactName, quote.clientPhone, quote.clientEmail, quote.clientTaxId, quote.clientVatNumber, quote.revisionRootQuoteId, quote.parentQuoteId, quote.revisionNumber);
+  for (const item of quote.items) await txn.runAsync(`INSERT INTO quote_items (id,quote_id,description,quantity,unit,unit_price_cents,position,short_description,price_mode,quantity_scaled,unit_code,body_price_cents,vat_treatment,vat_rate_basis_points,vat_note,line_discount_basis_points,technical_details,inclusions,exclusions,is_optional,confirmed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, item.id, quote.id, item.description, item.quantity, item.unit, item.unitPriceCents, item.position, item.shortDescription, item.priceMode, item.quantityScaled, item.unitCode, item.bodyPriceCents, item.vatTreatment, item.vatRateBasisPoints, item.vatNote, item.lineDiscountBasisPoints, item.technicalDetails, item.inclusions, item.exclusions, item.isOptional ? 1 : 0, item.confirmed ? 1 : 0);
+}
+async function applyRemoteQuoteDraft(db: SQLite.SQLiteDatabase, record: QuoteDraftRemoteRecord, force = false) {
+  const pending = await db.getFirstAsync<{operation_id:string}>('SELECT operation_id FROM quote_durability_outbox WHERE quote_id=? AND state=\'PENDING\'', record.quoteId);
+  const state = await db.getFirstAsync<{remote_version:number}>('SELECT remote_version FROM quote_durability_state WHERE quote_id=?', record.quoteId);
+  if (!force && pending) return;
+  if (!force && state && state.remote_version >= record.version) return;
+  if (record.deletedAt !== null) {
+    const local = await quoteById(db, record.quoteId);
+    if (local?.status === 'draft') await db.runAsync('DELETE FROM quotes WHERE id=?', record.quoteId);
+  } else {
+    if (record.quote.status !== 'draft' || record.quote.id !== record.quoteId) throw new Error('QUOTE_DURABILITY_REMOTE_RESPONSE_INVALID');
+    const existing = await db.getFirstAsync<{status:'draft'|'issued'}>('SELECT status FROM quotes WHERE id=?', record.quoteId);
+    if (existing?.status === 'issued') throw new Error('QUOTE_RESTORE_CONFLICT_ISSUED');
+    if (!existing) await db.runAsync('INSERT INTO quotes(id,client,title,created_at,updated_at,revision_root_quote_id,parent_quote_id,revision_number) VALUES(?,?,?,?,?,?,?,?)', record.quote.id, record.quote.client, record.quote.title, record.quote.createdAt, record.quote.updatedAt, record.quote.revisionRootQuoteId, record.quote.parentQuoteId, record.quote.revisionNumber);
+    await replaceDraftData(db as unknown as QuoteTransaction, record.quote, record.updatedAt);
+  }
+  await db.runAsync('INSERT INTO quote_durability_state(quote_id,remote_version,synced_at) VALUES(?,?,?) ON CONFLICT(quote_id) DO UPDATE SET remote_version=excluded.remote_version,synced_at=excluded.synced_at', record.quoteId, record.version, new Date().toISOString());
+}
+
+/** Local projection adapter for remote-authoritative editable quote drafts. */
+export function quoteDurabilityLocalRepository(): QuoteDurabilityLocalRepository {
+  return {
+    async applyIssued(record) {
+      const db = await getActiveDatabase();
+      const quote = remoteQuoteRecord(record.snapshot);
+      await db.withExclusiveTransactionAsync(async (txn) => {
+        await insertRestoredQuote(txn as unknown as SQLite.SQLiteDatabase, quote);
+        await txn.runAsync('INSERT OR IGNORE INTO issued_quote_snapshots(quote_id,schema_version,snapshot_json,created_at) VALUES(?,?,?,?)', quote.id, 3, json(record.snapshot), quote.issuedAt ?? new Date().toISOString());
+        await txn.runAsync('INSERT INTO quote_share_links(quote_id,issuance_id,commercial_outcome_cache,commercial_outcome_source_cache,commercial_outcome_decided_at_cache) VALUES(?,?,?,?,?) ON CONFLICT(quote_id) DO UPDATE SET issuance_id=excluded.issuance_id,commercial_outcome_cache=excluded.commercial_outcome_cache,commercial_outcome_source_cache=excluded.commercial_outcome_source_cache,commercial_outcome_decided_at_cache=excluded.commercial_outcome_decided_at_cache', quote.id, record.issuanceId, record.commercialOutcome, record.commercialOutcomeSource, record.commercialOutcomeDecidedAt);
+      });
+    },
+    async applyDraft(record) { const db = await getActiveDatabase(); await applyRemoteQuoteDraft(db, record); },
+    async prepareLegacyUpload() {
+      const db = await getActiveDatabase();
+      const rows = await db.getAllAsync<{id:string}>('SELECT id FROM quotes WHERE status=\'draft\'');
+      for (const row of rows) {
+        const state = await db.getFirstAsync<{remote_version:number}>('SELECT remote_version FROM quote_durability_state WHERE quote_id=?', row.id);
+        const queued = await db.getFirstAsync<{operation_id:string}>('SELECT operation_id FROM quote_durability_outbox WHERE quote_id=? AND state=\'PENDING\'', row.id);
+        const draft = await localDraftDurabilityRow(db, row.id);
+        if (draft && !state && !queued) await queueQuoteDurabilityPayload(db, draft.quote, false);
+      }
+    },
+    async listPending() {
+      const db = await getActiveDatabase();
+      const rows = await db.getAllAsync<{operation_id:string;quote_id:string;expected_version:number|null;payload_json:string}>('SELECT operation_id,quote_id,expected_version,payload_json FROM quote_durability_outbox WHERE state=\'PENDING\' ORDER BY created_at');
+      return rows.map((row) => { const payload = JSON.parse(row.payload_json) as Quote & {deleted:boolean}; return { operationId:row.operation_id, quoteId:row.quote_id, expectedVersion:row.expected_version, quote:payload, deleted:payload.deleted }; });
+    },
+    async markApplied(operationId, record) {
+      const db = await getActiveDatabase();
+      await db.withExclusiveTransactionAsync(async () => {
+        await applyRemoteQuoteDraft(db, record, true);
+        await db.runAsync('DELETE FROM quote_durability_outbox WHERE operation_id=?', operationId);
+        await db.runAsync("UPDATE quote_durability_outbox SET expected_version=? WHERE quote_id=? AND state='PENDING'", record.version, record.quoteId);
+      });
+    },
+    async markConflict(operation, remote) {
+      const db = await getActiveDatabase();
+      await db.withExclusiveTransactionAsync(async () => {
+        await db.runAsync("UPDATE quote_durability_outbox SET state='CONFLICT' WHERE operation_id=?", operation.operationId);
+        await db.runAsync('INSERT INTO quote_durability_conflicts(quote_id,operation_id,local_payload_json,remote_record_json,detected_at) VALUES(?,?,?,?,?) ON CONFLICT(quote_id) DO UPDATE SET operation_id=excluded.operation_id,local_payload_json=excluded.local_payload_json,remote_record_json=excluded.remote_record_json,detected_at=excluded.detected_at', operation.quoteId, operation.operationId, json(quoteDurabilityPayload(operation.quote, operation.deleted)), json(remote), new Date().toISOString());
+      });
+    },
+  };
+}
+
+export function operationalRestoreLocalRepository(): OperationalRestoreLocalRepository { return new SQLiteOperationalRestoreRepository(getActiveDatabase); }
 export async function listQuotes() {
   const db = await getActiveDatabase();
   const quotes = await db.getAllAsync<QuoteRow>('SELECT * FROM quotes ORDER BY COALESCE(issued_at, updated_at) DESC');
@@ -341,6 +427,10 @@ export async function createDraft() {
   const now = new Date().toISOString();
   const id = newId('quote');
   await db.runAsync('INSERT INTO quotes (id, client, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', id, '', '', now, now);
+  const draft = await quoteById(db, id);
+  if (!draft) throw new Error('Bozza appena creata non disponibile.');
+  await queueQuoteDurabilityPayload(db, draft, false);
+  notifyDurabilityChange();
   return id;
 }
 
@@ -348,6 +438,10 @@ export async function saveDraft(quote: Quote) {
   if (quote.status !== 'draft') throw new Error('Un preventivo emesso non può essere modificato.');
   const db = await getActiveDatabase();
   await db.withExclusiveTransactionAsync((txn) => replaceDraftData(txn as unknown as QuoteTransaction, quote, new Date().toISOString()));
+  const persisted = await quoteById(db, quote.id);
+  if (!persisted || persisted.status !== 'draft') throw new Error('Bozza aggiornata non disponibile.');
+  await queueQuoteDurabilityPayload(db, persisted, false);
+  notifyDurabilityChange();
 }
 
 export async function finalizeDraft(quote: Quote, canonical?:{number:number;year:number;revision?:{rootQuoteId:string;parentQuoteId:string;revisionNumber:number}}) {
@@ -360,6 +454,8 @@ export async function finalizeDraft(quote: Quote, canonical?:{number:number;year
   await db.withExclusiveTransactionAsync(async (txn) => {
     assignedNumber = await finalizeQuoteData(txn as unknown as QuoteTransaction, quote, { clock, validUntil, businessProfile: business, canonicalNumber:canonical?.number, canonicalYear:canonical?.year, revision:canonical?.revision });
   });
+  await queueQuoteDurabilityPayload(db, quote, true);
+  notifyDurabilityChange();
   if (assignedNumber === null) throw new Error('Emissione non completata.');
   return { quoteId:quote.id, number: assignedNumber, year: canonical?.year??clock.year };
 }
@@ -393,7 +489,10 @@ export async function createRevisionDraftFromIssuedQuote(quoteId: string) {
       });
     },
   }, { quoteId: () => newId('quote'), itemId: () => newId('item') });
-  return useCase.execute(quoteId);
+  const result = await useCase.execute(quoteId);
+  await queueQuoteDurabilityPayload(db, result.draft, false);
+  notifyDurabilityChange();
+  return result;
 }
 export async function getRevisionChainCapability(quoteId:string) {
   const db=await getActiveDatabase();
@@ -492,5 +591,9 @@ export async function deleteClient(id:string) { const db=await getActiveDatabase
 export async function deleteDraft(id: string) {
   const db = await getActiveDatabase();
   await assertDraftDeletable(db, id);
+  const draft = await quoteById(db, id);
+  if (!draft || draft.status !== 'draft') throw new Error('Bozza non disponibile.');
   await db.runAsync("DELETE FROM quotes WHERE id = ? AND status = 'draft'", id);
+  await queueQuoteDurabilityPayload(db, draft, true);
+  notifyDurabilityChange();
 }

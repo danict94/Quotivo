@@ -515,6 +515,50 @@ export const migrations: Migration[] = [
     );
     CREATE INDEX durability_outbox_pending ON durability_sync_outbox(state, created_at);
   ` },
+  { version: 22, sql: `
+    -- QF-042B: durable editable quote projections. Issued rows continue to be
+    -- restored only from their immutable remote issuance snapshots.
+    CREATE TABLE quote_durability_state (
+      -- Tombstones outlive the local draft row until the remote projection has
+      -- acknowledged deletion, so this state deliberately has no quote FK.
+      quote_id TEXT PRIMARY KEY NOT NULL,
+      remote_version INTEGER NOT NULL CHECK (remote_version > 0),
+      synced_at TEXT NOT NULL
+    );
+    CREATE TABLE quote_durability_outbox (
+      operation_id TEXT PRIMARY KEY NOT NULL,
+      quote_id TEXT NOT NULL,
+      expected_version INTEGER,
+      payload_json TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING','CONFLICT')),
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX quote_durability_outbox_pending ON quote_durability_outbox(state, created_at);
+    CREATE TABLE quote_durability_conflicts (
+      quote_id TEXT PRIMARY KEY NOT NULL,
+      operation_id TEXT NOT NULL,
+      local_payload_json TEXT NOT NULL,
+      remote_record_json TEXT NOT NULL,
+      detected_at TEXT NOT NULL
+    );
+  ` },
+  { version: 23, sql: `
+    -- QF-042C: remote operational records are restored into these local-only
+    -- projections. Share tokens are intentionally never persisted here.
+    CREATE TABLE quote_share_restore_cache (
+      share_id TEXT PRIMARY KEY NOT NULL,
+      issuance_id TEXT NOT NULL,
+      lifecycle TEXT NOT NULL CHECK (lifecycle IN ('ACTIVE','SUPERSEDED','REVOKED')),
+      opened_at TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX quote_share_restore_cache_issuance ON quote_share_restore_cache(issuance_id, created_at DESC);
+    CREATE TABLE operational_restore_issues (
+      kind TEXT NOT NULL CHECK (kind = 'ISSUANCE_MISSING_SNAPSHOT'),
+      issuance_id TEXT PRIMARY KEY NOT NULL,
+      detected_at TEXT NOT NULL
+    );
+  ` },
 ];
 
 export interface MigrationDatabase {
